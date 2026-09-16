@@ -11,6 +11,7 @@ Data shapes are shown as the classes in `dtu_lite/schemas.py`, since that is wha
 Everything that touches Docker goes through [python-on-whales](https://github.com/gabrieldemarmiesse/python-on-whales), which drives the `docker` CLI and its Compose plugin from Python with typed results.
 It is the only maintained Python route to `docker compose`; the official `docker` SDK speaks the Engine API and has no Compose support, and Compose is what a universe is.
 The trade is that the Docker CLI must be on `PATH`, which Docker Desktop and Docker Engine both provide and `check` confirms.
+The one place the library runs the CLI itself is `execute` and `shell`: they take the `docker compose ... exec` command python-on-whales builds and run it through `subprocess`, since that is where a timeout, the exit code, and the caller's terminal are.
 
 ## Failures
 
@@ -59,12 +60,26 @@ Every `profile` argument in this library accepts the same three forms:
 
 - A name, such as `copilot-cli`: the directory `.agents/digital-twin-universe/copilot-cli/`, searched for from the working directory upward to the git root.
 - A path to a Compose file.
-- A path to a directory, which must hold `compose.yaml` or `docker-compose.yaml`, or, failing both, a `Dockerfile`.
+- A path to a directory, which must hold `compose.yaml` or `docker-compose.yaml`, or, failing both, a `Dockerfile` (not yet implemented).
 
+When a name is not found in the project, it is looked for under the examples shipped inside the package, so `copilot-cli` launches on a fresh install with nothing copied. The name form never accepts a path separator.
 Whatever the form, the result is the entry point: a Compose file, or a lone `Dockerfile`, which is treated as a one-service profile with that service as the twin.
 When nothing is found, the capability raises `profile-not-found`, saying what it looked for and where.
 
+## Examples
+
+`examples/` in the installed package holds profiles that are complete and known to launch. Each is a directory under the examples root, in the same shape as `.agents/digital-twin-universe/<name>/`, and the skill lists its files under `<skill_resources>` so an agent reading `--help` can open them.
+
+```
+examples/
+  copilot-cli/      GitHub Copilot CLI installed as a user would, signed in with the host's GH_TOKEN
+```
+
+The examples root is `skill_directory() / "examples"`.
+
 ## Validate profile
+
+Not yet implemented as a capability; `launch` runs steps 1 to 3 below and stops on any error.
 
 Whether a profile can be launched, and what would be unrealistic about it if it were.
 Deterministic. Needs the Docker CLI for `docker compose config`, which does the Compose-side validation.
@@ -104,7 +119,7 @@ Raises `profile-not-found` and `docker-unavailable`.
 
 A universe is one Compose project. Its `id` is the project's name, `dtu-<profile name>-<4 hex>`, so `docker compose -p <id> logs` reaches the same stack by hand and `list` can tell two launches of one profile apart.
 
-What the tool renders for a universe lives in its state directory, `~/.dtu-lite/universes/<id>/`: `dtu.yaml`, the overlay, and `universe.json`, the record below. Everything else about a universe is in Docker.
+What the tool renders for a universe lives in its state directory, `~/.dtu-lite/universes/<id>/`: `dtu.yaml`, the overlay (not yet rendered), and `universe.json`, the record: id, name, description, profile path, twin, and creation time. Everything else about a universe is in Docker.
 
 Every capability that acts on a universe returns this:
 
@@ -117,7 +132,7 @@ class Universe:
     twin_machine: str
     state: Literal["starting", "running", "degraded", "stopped"]
     services: list[Service]
-    urls: list[Url]  # the twin's published ports, named by x-dtu.urls
+    urls: list[Url]  # the twin's published ports, named by x-dtu.urls (not yet honored: every port is `/`, unlabeled)
     state_path: Path
     created_at: datetime
 
@@ -147,8 +162,9 @@ def launch(profile: str | Path, timeout_seconds: int = 600) -> Universe
 ```
 
 Validates the profile and stops on any error. Assigns an id, renders the overlay, then brings the stack up in the order the overlay needs: the `git` and `gateway` services first when the profile calls for them, then image builds with the universe's network in place, then everything else. Returns when every healthcheck passes.
+Today, with no overlay, that is `docker compose -p <id> -f <profile> up --build --wait`; Compose's progress is passed through to stderr.
 
-When something fails after containers have started, they are left running so `doctor` and `docker compose logs` have something to read. `destroy` clears them.
+When something fails after containers have started, they are left running so `doctor` and `docker compose logs` have something to read. `destroy` clears them; every failure's remedy names the command.
 
 Raises:
 
@@ -158,8 +174,11 @@ Raises:
 - `build-failed`: the service, and the last lines of build output
 - `unhealthy`: the service, its healthcheck, and the last lines of its logs
 - `timeout`: what was still starting when `timeout_seconds` ran out
+- `launch-failed`: anything else Compose refused, with the last lines of its output
 
 ## List
+
+Not yet implemented.
 
 Every universe on this machine, running or not.
 
@@ -172,6 +191,8 @@ Universes are found by Docker label, so one whose state directory was deleted st
 Raises `docker-unavailable`.
 
 ## Status
+
+Not yet implemented; `launch` returns the same measurement.
 
 One universe, measured now.
 
@@ -205,7 +226,7 @@ class ExecResult:
 The command runs through a login shell (`sh -lc`), so `PATH` changes an installer made in `~/.profile` apply, the way they would in a person's terminal.
 A non-zero exit is a result, not a failure: `execute(id, "curl -sf localhost:8000/health")` returning `22` is the answer.
 
-Raises `universe-not-found`, `twin-not-running` (with the twin's state), `docker-unavailable`, and `timeout`.
+Raises `universe-not-found`, `twin-not-running` (with the twin's state), `docker-unavailable`, and `timeout`. On `timeout` the command is abandoned, not killed; whatever it started is still running in the twin.
 
 ## Shell
 
@@ -215,11 +236,13 @@ An interactive shell in the twin, attached to the caller's terminal.
 def shell(id: str, user: str | None = None, workdir: str | None = None) -> int
 ```
 
-Returns the shell's exit code when the person leaves it. In practice only the CLI calls this; it is in the library so the CLI adds nothing.
+Returns the shell's exit code when the person leaves it. The shell is `bash -l` when the image has bash, `sh -l` otherwise. In practice only the CLI calls this; it is in the library so the CLI adds nothing.
 
 Raises `universe-not-found`, `twin-not-running`, `docker-unavailable`, and `no-tty` when the caller has no terminal.
 
 ## Push and pull files
+
+Not yet implemented.
 
 Copy between the host and the twin.
 

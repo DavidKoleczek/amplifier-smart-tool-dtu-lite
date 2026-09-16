@@ -17,10 +17,30 @@ CAPABILITIES = (
         "Report whether this host can run a universe: Docker CLI, daemon, and Compose plugin.",
         model_backed=False,
     ),
+    Capability(
+        "launch",
+        "Launch a universe from a profile name or Compose file and wait until every healthcheck passes.",
+        model_backed=False,
+    ),
+    Capability(
+        "exec",
+        "Run a command in the twin as its user through a login shell, or open an interactive shell in it.",
+        model_backed=False,
+    ),
+    Capability(
+        "destroy",
+        "Remove a universe: its containers, networks, volumes, and state. Built images stay.",
+        model_backed=False,
+    ),
 )
 
-# Paths relative to the skill directory. Both ship inside the package, so both resolve after installation.
-SKILL_RESOURCES = ("SMART_TOOL.md", "lib.py")
+# Paths relative to the skill directory. All ship inside the package, so all resolve after installation.
+SKILL_RESOURCES = (
+    "SMART_TOOL.md",
+    "lib.py",
+    "examples/copilot-cli/compose.yaml",
+    "examples/copilot-cli/Dockerfile",
+)
 
 
 def skill_directory() -> Path:
@@ -43,8 +63,9 @@ def skill_resources() -> list[str]:
     missing = [path for path in SKILL_RESOURCES if not (root / path).is_file()]
     if missing:
         raise DtuLiteError(
-            f"The skill names files that are not in the installed package: {', '.join(missing)}. "
-            f"Ship them under {root} or drop them from SKILL_RESOURCES."
+            "skill-resource-missing",
+            f"The skill names files that are not in the installed package: {', '.join(missing)}.",
+            f"Ship them under {root} or drop them from SKILL_RESOURCES.",
         )
     return list(SKILL_RESOURCES)
 

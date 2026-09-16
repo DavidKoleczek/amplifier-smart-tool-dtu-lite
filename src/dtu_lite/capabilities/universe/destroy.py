@@ -1,0 +1,29 @@
+"""Destroy: take a universe down and forget it."""
+
+from python_on_whales import ClientNotFoundError
+from python_on_whales.exceptions import DockerException
+
+from dtu_lite.capabilities.universe import state
+from dtu_lite.capabilities.universe.compose import (
+    PROJECT_LABEL,
+    compose_client,
+    project_containers,
+    translate_docker_error,
+)
+from dtu_lite.schemas import Destroyed
+
+
+def destroy(id: str) -> Destroyed:
+    """Remove every container, network, and volume of the universe, then its state directory. Images stay."""
+    state.read(id)
+    client = compose_client(id)
+    label = f"{PROJECT_LABEL}={id}"
+    try:
+        removed = [container.name for container in project_containers(id)]
+        removed += [network.name for network in client.network.list(filters=[("label", label)])]
+        removed += [volume.name for volume in client.volume.list(filters=[("label", label)])]
+        client.compose.down(volumes=True, remove_orphans=True, quiet=True)
+    except (ClientNotFoundError, DockerException) as error:
+        raise translate_docker_error(error) or error from error
+    state.remove(id)
+    return Destroyed(id=id, removed=removed)

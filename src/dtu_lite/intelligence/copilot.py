@@ -38,13 +38,16 @@ class CopilotIntelligence:
             return self._token
         if shutil.which("gh") is None:
             raise DtuLiteError(
-                "Model-backed capabilities need the GitHub CLI. Install gh and sign in with `gh auth login`."
+                "gh-missing",
+                "Model-backed capabilities need the GitHub CLI.",
+                "Install gh and sign in with `gh auth login`.",
             )
         minted = subprocess.run(["gh", "auth", "token"], capture_output=True, text=True)
         if minted.returncode != 0:
             raise DtuLiteError(
-                f"The GitHub CLI is not signed in: {minted.stderr.strip()} "
-                "Run `gh auth login` with an account that has Copilot access."
+                "gh-not-signed-in",
+                f"The GitHub CLI is not signed in: {minted.stderr.strip()}",
+                "Run `gh auth login` with an account that has Copilot access.",
             )
         self._token = minted.stdout.strip()
         return self._token

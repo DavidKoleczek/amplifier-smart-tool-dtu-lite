@@ -1,0 +1,110 @@
+"""Compose access shared by every universe capability: the client, error translation, and measuring a project."""
+
+from pathlib import Path
+
+from python_on_whales import ClientNotFoundError, DockerClient
+from python_on_whales.components.container.cli_wrapper import Container
+from python_on_whales.exceptions import DockerException
+
+from dtu_lite.capabilities.universe.state import UniverseRecord
+from dtu_lite.schemas import DtuLiteError, Health, Service, Universe, UniverseState, Url
+
+SERVICE_LABEL = "com.docker.compose.service"
+PROJECT_LABEL = "com.docker.compose.project"
+DAEMON_DOWN_MARKERS = ("Cannot connect to the Docker daemon", "docker daemon is not running", "error during connect")
+
+
+def compose_client(project: str | None = None, compose_files: list[Path] | None = None) -> DockerClient:
+    """A Docker client scoped to one Compose project. With only a project name, Compose finds the stack by label."""
+    files: list[str | Path] = list(compose_files or [])
+    return DockerClient(compose_project_name=project, compose_files=files)
+
+
+def docker_unavailable() -> DtuLiteError:
+    return DtuLiteError(
+        "docker-unavailable",
+        "Docker is not usable from this process.",
+        "Run `dtu-lite check` for the missing prerequisite and its remedy.",
+    )
+
+
+def translate_docker_error(error: Exception) -> DtuLiteError | None:
+    """The `docker-unavailable` failure when the error means Docker itself is missing or down, else None."""
+    if isinstance(error, ClientNotFoundError):
+        return docker_unavailable()
+    if isinstance(error, DockerException):
+        stderr = error.stderr or ""
+        if any(marker in stderr for marker in DAEMON_DOWN_MARKERS):
+            return docker_unavailable()
+    return None
+
+
+def project_containers(project: str) -> list[Container]:
+    """Every container of a Compose project, running or not."""
+    try:
+        return compose_client(project).compose.ps(all=True)
+    except (ClientNotFoundError, DockerException) as error:
+        raise translate_docker_error(error) or error from error
+
+
+def measure(record: UniverseRecord) -> Universe:
+    """The universe a record describes, as Docker reports it now."""
+    containers = project_containers(record.id)
+    services = [_service(container) for container in containers]
+    twin = next((container for container in containers if service_name(container) == record.twin_machine), None)
+    return Universe(
+        id=record.id,
+        name=record.name,
+        description=record.description,
+        profile_path=record.profile_path,
+        twin_machine=record.twin_machine,
+        state=universe_state(services),
+        services=services,
+        urls=_urls(twin) if twin is not None else [],
+        state_path=record.state_path,
+        created_at=record.created_at,
+    )
+
+
+def universe_state(services: list[Service]) -> UniverseState:
+    """Running when everything is up and healthy, starting while any is becoming so, degraded when any has failed."""
+    if not any(service.state == "running" for service in services):
+        return "stopped"
+    if any(service.state != "running" or service.health == "unhealthy" for service in services):
+        return "degraded"
+    if any(service.health == "starting" for service in services):
+        return "starting"
+    return "running"
+
+
+def _service(container: Container) -> Service:
+    health = container.state.health.status if container.state.health is not None else None
+    return Service(
+        name=service_name(container),
+        state=container.state.status or "unknown",
+        health=_health(health),
+        image=container.config.image or "",
+    )
+
+
+def _health(status: str | None) -> Health | None:
+    match status:
+        case "starting" | "healthy" | "unhealthy":
+            return status
+        case _:
+            return None
+
+
+def service_name(container: Container) -> str:
+    return (container.config.labels or {}).get(SERVICE_LABEL, container.name)
+
+
+def _urls(twin: Container) -> list[Url]:
+    """The twin's published ports as the host reaches them, one URL per host port, in port order."""
+    ports: set[int] = set()
+    for bindings in (twin.network_settings.ports or {}).values():
+        for binding in bindings or []:
+            host_port = binding.get("HostPort")
+            if host_port:
+                ports.add(int(host_port))
+    return [Url(url=f"http://localhost:{port}/", port=port, path="/", label=None) for port in sorted(ports)]

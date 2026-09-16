@@ -23,17 +23,19 @@ A profile usually belongs to the project it tests, under `.agents/digital-twin-u
 
 `launch --profile codex-cli` resolves to that directory, searching from the working directory upward to the git root, so it works from any subdirectory of the project. `create-profile` writes here. Nothing else is special about the location: it is where an agent looks first, and where the next agent finds what the last one made.
 
+A name not found in the project is looked for under the examples shipped inside the package, `examples/<name>/` beside the tool's own files. `launch --profile copilot-cli` works on a fresh install for that reason.
+
 An environment defined anywhere else launches by path. `launch --profile <path>` takes:
 
 - A Compose file.
 - A directory holding `compose.yaml` or `docker-compose.yaml`.
-- A directory holding only a `Dockerfile`, which launches as a single-service universe with that service as the twin.
+- A directory holding only a `Dockerfile`, which launches as a single-service universe with that service as the twin (not yet implemented).
 
 A Compose file without `x-dtu` is a valid profile when it has one service. Add `x-dtu` when it has several, or to serve repositories, rewrite hosts, or restrict egress.
 
 ## Example
 
-GitHub Copilot CLI, installed the way its README says to and signed in with the host's `gh` token:
+GitHub Copilot CLI, installed the way its README says to and signed in with the host's `gh` token. This is the shipped `examples/copilot-cli`, so it launches by name:
 
 ```yaml
 # Base of the project name; launch appends a short id.
@@ -95,7 +97,7 @@ A profile has one service the software under test is installed and run in, and a
 
 ### `urls`
 
-Optional. Names and paths for the URLs `launch` reports, by host port. Without it, every published port is reported as `http://localhost:<port>/`.
+Optional, and not yet honored. Names and paths for the URLs `launch` reports, by host port. Without it, every published port is reported as `http://localhost:<port>/`.
 
 ```yaml
 urls:
@@ -166,6 +168,8 @@ Optional. Hostnames the universe may reach. When present, everything else is ref
 
 ## What `launch` adds
 
+Not yet implemented: today `launch` runs the profile as is, which is exactly right for a profile with no `repositories`, `rewrites`, or `allow`.
+
 The overlay, rendered into the universe's state directory and run as a second `-f` file, never edits the profile:
 
 - A `git` service when `repositories` is set, populated before anything that depends on it starts.
@@ -176,6 +180,8 @@ The overlay, rendered into the universe's state directory and run as a second `-
 The service names `git` and `gateway` are reserved. A profile with no `repositories[].url`, no `rewrites`, and no `allow` renders no gateway, no CA, and no proxy environment.
 
 ## What `validate-profile` checks
+
+Of these, `launch` runs `docker compose config` and the `twin_machine` check today; the rest arrive with `validate-profile`.
 
 `docker compose config` first, so the Compose side is validated by Compose itself, interpolation included, and an unset `${NAME}` fails naming the variable. Then `x-dtu` against its schema, then the invariants that make the file a universe rather than just a Compose project. Errors:
 

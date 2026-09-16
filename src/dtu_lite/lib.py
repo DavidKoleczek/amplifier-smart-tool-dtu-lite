@@ -3,9 +3,12 @@
 from pathlib import Path
 
 from dtu_lite.capabilities.check import check as check_module
+from dtu_lite.capabilities.universe import destroy as destroy_module
+from dtu_lite.capabilities.universe import execute as execute_module
+from dtu_lite.capabilities.universe import launch as launch_module
 from dtu_lite.core import manifest
 from dtu_lite.core import skill as skill_module
-from dtu_lite.schemas import HostReport, Manifest
+from dtu_lite.schemas import Destroyed, ExecResult, HostReport, Manifest, Universe
 
 
 def load_manifest() -> Manifest:
@@ -36,3 +39,29 @@ def repository_url() -> str | None:
 def check() -> HostReport:
     """Whether this host can run a universe: the Docker CLI, a reachable daemon, and the Compose plugin."""
     return check_module.check()
+
+
+def launch(profile: str | Path, timeout_seconds: int = 600) -> Universe:
+    """From a profile to a running, ready universe: validated, recorded, brought up, and waited on."""
+    return launch_module.launch(profile, timeout_seconds)
+
+
+def execute(
+    id: str,
+    command: str,
+    user: str | None = None,
+    workdir: str | None = None,
+    timeout_seconds: int = 300,
+) -> ExecResult:
+    """Run one command in the twin through a login shell. A non-zero exit is a result, not a failure."""
+    return execute_module.execute(id, command, user, workdir, timeout_seconds)
+
+
+def shell(id: str, user: str | None = None, workdir: str | None = None) -> int:
+    """An interactive shell in the twin, attached to this terminal; returns its exit code."""
+    return execute_module.shell(id, user, workdir)
+
+
+def destroy(id: str) -> Destroyed:
+    """Remove a universe: every container, network, and volume, and its state directory. Images stay."""
+    return destroy_module.destroy(id)

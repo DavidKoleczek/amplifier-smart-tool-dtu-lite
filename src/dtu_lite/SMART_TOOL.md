@@ -53,10 +53,10 @@ wrapper over it, so anything you can do from the shell you can also do from Pyth
 
 ## Command surfaces
 
-Deterministic commands (`check`, `validate-profile`, `launch`, `list`, `status`, `exec`,
-`file-push`, `file-pull`, `destroy`) run with no model provider configured. Smart commands
-(`install`, `create-profile`, `doctor`) are model-backed and say so in their help text. Serve
-commands (`dashboard`) run a local web UI over the same library.
+Deterministic commands run with no model provider configured. Today those are `check`,
+`launch`, `exec`, and `destroy`; the capability list below is authoritative. Smart commands are
+model-backed and say so in their help text. Serve commands run a local web UI over the same
+library.
 
 ## Before writing code
 
@@ -64,7 +64,29 @@ Run `dtu-lite check` first. It reports whether Docker is present and usable and 
 `remedy` per missing prerequisite when it is not; nothing else in the tool works until it passes.
 Confirm every capability and argument against `dtu-lite <command> --help` before using it.
 Do not fill gaps from memory. The library source beside this file, `lib.py`, carries the
-signatures. The repository's `docs/01-library.md` and `docs/02-cli.md` carry the rest.
+signatures. The repository's `docs/01-library.md`, `docs/02-cli.md`, and `docs/03-profile.md`
+carry the rest.
+
+## A first universe
+
+A profile is a Compose file with an `x-dtu` block. `launch --profile <name>` looks for
+`.agents/digital-twin-universe/<name>/` in the project, then in the examples shipped under the
+skill directory, so the shipped ones launch by name with nothing copied:
+
+```bash
+export GH_TOKEN="$(gh auth token)"          # the profile reads it at launch, never writes it
+dtu-lite launch --profile copilot-cli       # prints the universe, with its id
+dtu-lite exec --id <id> --command 'copilot --version'
+dtu-lite exec --id <id>                     # interactive shell as the twin's user
+dtu-lite destroy --id <id>
+```
+
+`examples/copilot-cli/` under the skill directory is that profile: GitHub Copilot CLI installed
+the way its README says, as a created user, signed in with the host's token. Read it before
+writing a profile of your own; `docs/03-profile.md` in the repository is the schema.
+
+Every universe launched from this machine leaves a directory under `~/.dtu-lite/universes/<id>/`
+until it is destroyed, and its containers keep running. Destroy what you launch.
 
 ## Install
 

@@ -57,7 +57,19 @@ dtu-lite manifest
 
 # Report whether this host can run a universe: Docker CLI, daemon, and Compose plugin
 dtu-lite check
+
+# Launch a universe from a profile name or Compose file and wait until it is ready
+dtu-lite launch --profile <name-or-path>
+
+# Run a command in the twin, or open a shell in it
+dtu-lite exec --id <id> --command "<command>"
+dtu-lite exec --id <id>
+
+# Take it down
+dtu-lite destroy --id <id>
 ```
+
+Profiles live under `.agents/digital-twin-universe/<name>/` in a project; the tool also ships ready-to-launch [examples](src/dtu_lite/examples). See the [profile reference](docs/03-profile.md).
 
 See the [CLI reference](docs/02-cli.md) for every flag and the [library reference](docs/01-library.md) for the Python surface.
 

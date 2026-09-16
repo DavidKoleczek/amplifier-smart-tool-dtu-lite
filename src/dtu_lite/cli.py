@@ -53,6 +53,53 @@ def check() -> None:
         raise typer.Exit(code=1)
 
 
+@app.command()
+def launch(
+    profile: Annotated[
+        str, typer.Option(help="A profile name, a Compose file, or a directory holding one. See `--help` for names.")
+    ],
+    timeout_seconds: Annotated[int, typer.Option(help="How long to wait for every healthcheck.")] = 600,
+) -> None:
+    """Launch a universe from a profile and wait until it is ready. Deterministic.
+
+    Prints the universe as JSON, with its id for `exec` and `destroy`. Compose's progress goes to stderr.
+    Exits 1 with the cause and remedy when the profile is invalid, a variable is unset, a port is taken,
+    a build fails, or a service never becomes healthy.
+    """
+    typer.echo(lib.launch(profile, timeout_seconds).model_dump_json(indent=2))
+
+
+@app.command("exec")
+def exec_(
+    id: Annotated[str, typer.Option(help="The universe id `launch` printed.")],
+    command: Annotated[
+        str | None, typer.Option(help="Run this through a login shell in the twin. Omit for an interactive shell.")
+    ] = None,
+    user: Annotated[str | None, typer.Option(help="Run as this user instead of the twin's own.")] = None,
+    workdir: Annotated[str | None, typer.Option(help="Run here instead of the twin's own working directory.")] = None,
+    timeout_seconds: Annotated[int, typer.Option(help="How long a command may run; ignored for a shell.")] = 300,
+) -> None:
+    """Run a command in the twin, or open a shell in it. Deterministic.
+
+    With --command, prints the result as JSON (exit_code, stdout, stderr) and exits with the command's own exit
+    code. Without it, attaches an interactive login shell to this terminal and exits with the shell's exit code.
+    """
+    if command is None:
+        raise typer.Exit(code=lib.shell(id, user, workdir))
+    result = lib.execute(id, command, user, workdir, timeout_seconds)
+    typer.echo(result.model_dump_json(indent=2))
+    raise typer.Exit(code=result.exit_code)
+
+
+@app.command()
+def destroy(id: Annotated[str, typer.Option(help="The universe id `launch` printed.")]) -> None:
+    """Remove a universe: its containers, networks, volumes, and state. Built images stay. Deterministic.
+
+    Prints what was removed as JSON.
+    """
+    typer.echo(lib.destroy(id).model_dump_json(indent=2))
+
+
 def main() -> int:
     try:
         app()

@@ -1,0 +1,181 @@
+"""The universe capabilities apart from Docker: state, measurement, failure naming, and the CLI over them."""
+
+import json
+from pathlib import Path
+
+import pytest
+from python_on_whales.exceptions import DockerException
+from typer.testing import CliRunner
+
+from dtu_lite import lib
+from dtu_lite.capabilities.universe import launch as launch_module
+from dtu_lite.capabilities.universe import state
+from dtu_lite.capabilities.universe.compose import universe_state
+from dtu_lite.capabilities.universe.state import UniverseRecord
+from dtu_lite.cli import app, main
+from dtu_lite.schemas import Destroyed, DtuLiteError, ExecResult, Health, Service
+
+runner = CliRunner()
+
+
+@pytest.fixture
+def state_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    monkeypatch.setattr(state, "STATE_ROOT", tmp_path)
+    return tmp_path
+
+
+def _record(id: str = "dtu-demo-0000") -> UniverseRecord:
+    return UniverseRecord(
+        id=id,
+        name="demo",
+        description=None,
+        profile_path=Path("/profiles/demo/compose.yaml"),
+        twin_machine="app",
+        created_at=state.now(),
+    )
+
+
+def _service(state_word: str, health: Health | None = None) -> Service:
+    return Service(name="svc", state=state_word, health=health, image="img")
+
+
+def test_ids_carry_the_profile_name_and_differ_between_launches() -> None:
+    first, second = state.new_id("demo"), state.new_id("demo")
+
+    assert first.startswith("dtu-demo-")
+    assert len(first) == len("dtu-demo-") + 4
+    assert first != second
+
+
+def test_a_written_record_reads_back_and_is_gone_after_remove(state_root: Path) -> None:
+    record = _record()
+    state.write(record)
+
+    assert state.read(record.id) == record
+    assert record.state_path == state_root / record.id
+
+    state.remove(record.id)
+
+    with pytest.raises(DtuLiteError) as raised:
+        state.read(record.id)
+    assert raised.value.code == "universe-not-found"
+    assert record.id in raised.value.message
+
+
+def test_an_image_or_container_name_is_pointed_back_at_its_universe_id(state_root: Path) -> None:
+    state.write(_record("dtu-demo-1234"))
+
+    for lookalike in ("dtu-demo-1234-app", "dtu-demo-1234-app-1"):
+        with pytest.raises(DtuLiteError) as raised:
+            state.read(lookalike)
+        assert raised.value.code == "universe-not-found"
+        assert "the universe id is 'dtu-demo-1234'" in raised.value.remedy
+
+    with pytest.raises(DtuLiteError) as raised:
+        state.read("dtu-other-0000")
+    assert "Universes launched from this machine: dtu-demo-1234" in raised.value.remedy
+
+
+def test_error_string_is_message_then_remedy() -> None:
+    error = DtuLiteError("some-code", "It broke.", "Fix it.")
+
+    assert str(error) == "It broke. Fix it."
+    assert (error.code, error.message, error.remedy) == ("some-code", "It broke.", "Fix it.")
+
+
+@pytest.mark.parametrize(
+    ("services", "expected"),
+    [
+        ([], "stopped"),
+        ([_service("exited")], "stopped"),
+        ([_service("running", "healthy"), _service("running")], "running"),
+        ([_service("running", "starting")], "starting"),
+        ([_service("running", "unhealthy")], "degraded"),
+        ([_service("running", "healthy"), _service("exited")], "degraded"),
+    ],
+)
+def test_universe_state_from_its_services(services: list[Service], expected: str) -> None:
+    assert universe_state(services) == expected
+
+
+@pytest.mark.parametrize(
+    ("stderr", "code", "fragment"),
+    [
+        (b"failed to bind host port 0.0.0.0:8410/tcp: address already in use", "port-in-use", "8410"),
+        (b"Bind for 0.0.0.0:9000 failed: port is already allocated", "port-in-use", "9000"),
+        (b"failed to solve: process did not complete successfully", "build-failed", "failed to solve"),
+        (b"application not healthy after 12s", "timeout", "12s"),
+        (b"something else entirely", "launch-failed", "something else"),
+        (b"Cannot connect to the Docker daemon at unix:///var/run/docker.sock", "docker-unavailable", "Docker"),
+    ],
+)
+def test_launch_failures_are_named_from_compose_output(stderr: bytes, code: str, fragment: str) -> None:
+    error = DockerException(["docker", "compose", "up"], 1, stderr=stderr)
+
+    translated = launch_module._launch_error(_record(), 12, error)
+
+    assert translated.code == code
+    assert fragment in translated.message
+    if code != "docker-unavailable":
+        assert "dtu-lite destroy --id dtu-demo-0000" in translated.remedy
+
+
+def test_an_unhealthy_container_is_named_with_its_logs(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(launch_module, "_container_logs", lambda container: f"logs of {container}")
+    error = DockerException(["docker", "compose", "up"], 1, stderr=b"container dtu-demo-0000-app-1 is unhealthy")
+
+    translated = launch_module._launch_error(_record(), 12, error)
+
+    assert translated.code == "unhealthy"
+    assert "logs of dtu-demo-0000-app-1" in translated.message
+
+
+def test_exec_prints_the_result_and_exits_with_the_commands_code(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_execute(id: str, command: str, user: str | None, workdir: str | None, timeout_seconds: int) -> ExecResult:
+        seen.update(id=id, command=command, user=user, workdir=workdir, timeout_seconds=timeout_seconds)
+        return ExecResult(exit_code=7, stdout="out\n", stderr="err\n")
+
+    monkeypatch.setattr(lib, "execute", fake_execute)
+
+    result = runner.invoke(app, ["exec", "--id", "dtu-demo-0000", "--command", "false", "--user", "root"])
+
+    assert result.exit_code == 7
+    assert json.loads(result.stdout) == {"exit_code": 7, "stdout": "out\n", "stderr": "err\n"}
+    assert seen == {"id": "dtu-demo-0000", "command": "false", "user": "root", "workdir": None, "timeout_seconds": 300}
+
+
+def test_exec_without_a_command_opens_a_shell(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(lib, "shell", lambda id, user, workdir: 3)
+
+    result = runner.invoke(app, ["exec", "--id", "dtu-demo-0000"])
+
+    assert result.exit_code == 3
+    assert result.stdout == ""
+
+
+def test_destroy_prints_what_was_removed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(lib, "destroy", lambda id: Destroyed(id=id, removed=[f"{id}-app-1"]))
+
+    result = runner.invoke(app, ["destroy", "--id", "dtu-demo-0000"])
+
+    assert result.exit_code == 0
+    assert json.loads(result.stdout)["removed"] == ["dtu-demo-0000-app-1"]
+
+
+def test_a_named_failure_prints_message_and_remedy_and_exits_one(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def fail(profile: str, timeout_seconds: int) -> None:
+        raise DtuLiteError("profile-not-found", "No profile 'x'.", "Pass a path.")
+
+    monkeypatch.setattr(lib, "launch", fail)
+    monkeypatch.setattr("sys.argv", ["dtu-lite", "launch", "--profile", "x"])
+
+    exit_code = main()
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert captured.out == ""
+    assert captured.err.strip() == "No profile 'x'. Pass a path."

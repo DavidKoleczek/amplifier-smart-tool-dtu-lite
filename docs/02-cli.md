@@ -31,6 +31,33 @@ dtu-lite check
 
 `lib.check()`, printed as JSON. Exits 0 when the report says `ok`, 1 when a prerequisite is missing, so `dtu-lite check && dtu-lite launch ...` does the right thing. The report is on stdout either way.
 
+## dtu-lite launch
+
+```bash
+dtu-lite launch --profile <name-or-path> [--timeout-seconds 600]
+```
+
+`lib.launch()`, printed as JSON. Compose's progress goes to stderr while it runs, so the JSON on stdout stays clean. Exits 1 with the cause and remedy on any launch failure; the remedy names the `destroy` command that clears whatever started.
+
+## dtu-lite exec
+
+```bash
+dtu-lite exec --id <id> --command "<shell command>" [--user <user>] [--workdir <path>] [--timeout-seconds 300]
+dtu-lite exec --id <id> [--user <user>] [--workdir <path>]
+```
+
+With `--command`, `lib.execute()`: prints the `ExecResult` as JSON and exits with the command's own exit code, so `dtu-lite exec ... --command "curl -sf ..." && ...` does the right thing. The JSON is on stdout whatever the code.
+
+Without `--command`, `lib.shell()`: attaches an interactive shell to the terminal, prints nothing, and exits with the shell's exit code. Without a terminal it exits 1 with `no-tty`.
+
+## dtu-lite destroy
+
+```bash
+dtu-lite destroy --id <id>
+```
+
+`lib.destroy()`, printed as JSON.
+
 ## Adding a command
 
 Each command gets a section here: the invocation shape with its options and defaults, which library function it calls, and what it prints and exits with. Argument meanings belong in the library reference, not here.
