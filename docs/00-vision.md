@@ -44,6 +44,20 @@ On Linux and macOS the twin is a Linux container.
 On Windows it is a Linux container by default, and a profile can opt into Windows containers when the software under test needs Windows itself, such as a `.exe` installer or PowerShell-first tooling. 
 Both modes render the same kind of `compose.yaml` and answer to the same commands.
 
+## What this adds to Docker Compose
+
+Compose already runs multi-service stacks, so the value is in what an agent would otherwise have to build or remember each time:
+
+- Local code as if released, out of the box. Name a repository on disk and the URL it will live at, and `git clone`, `pip install`, and `uv tool install` inside the universe fetch the local checkout from that URL. The git server, gateway, TLS termination, CA minting, and trust wiring in every image come with the tool; nobody assembles them by hand.
+- Real hosts replaced by services you control. The same gateway routes any `host/path` to a Compose service, so a mock of `api.openai.com` in the profile answers at the real URL, TLS included, and the code under test needs no configuration to talk to it.
+- A place to look. Profiles live at `.agents/digital-twin-universe/<profile-name>/` in a project, so an agent finds them, and `launch --profile <profile-name>` resolves there. Any Compose file or Dockerfile elsewhere, such as an evaluation task's environment, launches by path, and adapts fully by adding an `x-dtu` block.
+- Identity. Every universe has an id; `list`, `status`, `exec`, `file-push`, `file-pull`, and `destroy` take it. No project names, file paths, or service names to remember, and the twin is always the target.
+- Failures that name the fix. Every command says what went wrong and what to do about it, in the same terms on every OS. Compose reports for a person reading a terminal; an agent needs the cause and the remedy stated.
+- Checked before it runs. `validate-profile` runs Compose's own validation and then the invariants of a universe: a twin exists, nothing routes around the gateway, served paths are git repositories. Warnings point out where a profile is less realistic than it means to be.
+- Ready means ready. `launch` waits on every healthcheck and reports the URLs the host can open, so a following `exec` never races the stack.
+- Prerequisites owned. `check` says whether Docker is usable and `install` offers to make it so, on each platform.
+- Help when it breaks. `create-profile` writes a profile from a description, and `doctor` reads the universe's logs and state to name what is wrong.
+
 ## Validating DTU Lite with itself
 
 DTU Lite is held to its own standard: it is verified inside a universe, as a real user would install and run it, not on the machine it was developed on. 
@@ -64,8 +78,8 @@ Constraints this sets:
 
 - Docker is the only prerequisite. `check` reports whether it is present and usable. `install` offers to install Docker Desktop or Docker Engine through the platform's package manager (winget, brew, apt/dnf) and only acts with explicit consent. If the system does not allow it, `install` says exactly what to do by hand.
 - One interface on every OS. Every command takes the same flags and returns the same JSON on Windows, macOS, and Linux. Platform differences are absorbed inside the tool, never surfaced to the caller.
-- From zero to a running universe in one command after Docker is present: `launch --profile profile.yaml`.
-- The profile is small and owned by this tool. It describes the twin's base image, packages, files to provision, environment variables to pass through, dependencies, exposed ports, local repos to publish, and URLs to rewrite. The tool renders it into a `compose.yaml` and supporting files that a person can read, edit, and run with plain `docker compose`.
+- From zero to a running universe in one command after Docker is present: `launch --profile <profile-name>`, resolving under `.agents/digital-twin-universe/`, or `launch --profile path/to/compose.yaml`.
+- The profile is a Compose file. The twin, its dependencies, ports, environment, and healthchecks are ordinary Compose services, so nothing is lost in translation and anyone who knows Compose can write one. What Compose cannot say, which service is the twin, which local repositories to publish, and what the gateway rewrites or allows, lives in an `x-dtu` block that plain `docker compose` ignores. The tool renders an overlay file beside it, with Gitea, the gateway, and the trust plumbing, and runs both together.
 - Windows containers are an option, not a requirement. A profile on Windows can ask for a Windows twin; everything else about the tool stays the same.
 - A dashboard, in the style of [mybench-smart-tool](https://github.com/DavidKoleczek/mybench-smart-tool), shows every universe on the machine, what it exposes, and its logs, and lets a person open, shell into, or destroy one without remembering ids.
 - The same command set as the Digital Twin Universe smart tool, so agents and skills written against it need only relearn the profile. Deterministic commands run with no model provider configured:
@@ -98,7 +112,7 @@ dtu-lite dashboard
 ```
 
 - Every result is one JSON document on stdout. Failures carry a stable `code` and a `remedy`.
-- The Compose file is the escape hatch. Anything the tool cannot express can be done by editing the rendered `compose.yaml` and relaunching.
+- Nothing is hidden. The profile is a Compose file and the rendered overlay is a Compose file. Both can be read, and both can be run with `docker compose` by hand.
 
 ## Non-Goals
 
