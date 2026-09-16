@@ -1,13 +1,14 @@
-# Dtu Lite Smart Tool
+# DTU Lite Smart Tool
 
 Stands up an isolated, realistic environment from a profile on Docker Compose so software can be tested as though actually deployed. Use when passing tests on your machine is not enough evidence and code must run against real dependencies, published local repositories, and rewritten URLs without touching the host.
 
-Dtu Lite is a [Smart Tool](https://github.com/microsoft/amplifier-smart-tools): a library with a thin CLI over it, whose model-backed capabilities sit behind an interface.
+DTU Lite is a [Smart Tool](https://github.com/microsoft/amplifier-smart-tools): a library with a thin CLI over it, whose model-backed capabilities sit behind an interface.
 
 ## Installation
 
 Prerequisites:
 - [uv](https://docs.astral.sh/uv/getting-started/installation/).
+- [Docker](https://docs.docker.com/get-started/get-docker/), which every universe runs on.
 - [GitHub CLI](https://cli.github.com/) signed in to an account with a [GitHub Copilot subscription](https://github.com/github/copilot-cli#prerequisites) for the model-backed capabilities.
 
 From a clone of this repository:

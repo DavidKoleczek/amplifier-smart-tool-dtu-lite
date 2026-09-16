@@ -1,4 +1,4 @@
-"""Top level entry point for the Dtu Lite library."""
+"""Top level entry point for the DTU Lite library."""
 
 from pathlib import Path
 

@@ -1,4 +1,4 @@
-# Contributing to Dtu Lite
+# Contributing to DTU Lite
 
 ## Development Setup
 

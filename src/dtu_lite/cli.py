@@ -1,4 +1,4 @@
-"""Command line entry point for Dtu Lite."""
+"""Command line entry point for DTU Lite."""
 
 from typing import Annotated
 

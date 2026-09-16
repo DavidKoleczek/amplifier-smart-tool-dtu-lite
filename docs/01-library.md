@@ -1,6 +1,6 @@
 # Library Reference
 
-Every capability of Dtu Lite is reachable from `dtu_lite.lib`.
+Every capability of DTU Lite is reachable from `dtu_lite.lib`.
 All other surfaces, including the CLI, are thin wrappers over the library and add no capability of their own.
 
 ## Intelligence

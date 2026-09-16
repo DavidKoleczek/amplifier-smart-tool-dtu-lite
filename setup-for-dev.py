@@ -8,11 +8,16 @@ import shlex
 import subprocess
 
 REFERENCE_ROOT = Path(__file__).parent / "reference"
-REFERENCES = [
-    "https://github.com/microsoft/amplifier-smart-tools",
-    "https://github.com/github/copilot-sdk",
-    "https://github.com/agentskills/agentskills",
-]
+REFERENCES = {
+    "amplifier-smart-tools": "https://github.com/microsoft/amplifier-smart-tools",
+    "copilot-sdk": "https://github.com/github/copilot-sdk",
+    "agentskills": "https://github.com/agentskills/agentskills",
+    "amplifier-bundle-digital-twin-universe": "https://github.com/microsoft/amplifier-bundle-digital-twin-universe",
+    "amplifier-bundle-gitea": "https://github.com/microsoft/amplifier-bundle-gitea",
+    "amplifier-smart-tool-digital-twin-universe": "https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe",
+    "docker-docs": "https://github.com/docker/docs",
+    "mybench-smart-tool": "https://github.com/DavidKoleczek/mybench-smart-tool",
+}
 
 
 def run(command: str) -> None:
@@ -22,8 +27,8 @@ def run(command: str) -> None:
 
 def clone_missing_references() -> None:
     """Clone every reference repository that is absent; they are gitignored, so a fresh clone has none."""
-    for repository in REFERENCES:
-        destination = REFERENCE_ROOT / repository.rsplit("/", 1)[-1]
+    for directory_name, repository in REFERENCES.items():
+        destination = REFERENCE_ROOT / directory_name
         if destination.exists():
             continue
         destination.parent.mkdir(parents=True, exist_ok=True)

@@ -3,15 +3,23 @@ smart_tool_format: 1
 name: dtu-lite
 version: 0.1.0
 description: >-
-  Stands up an isolated, realistic environment from a profile on Docker Compose so software can be tested as though actually deployed. Use when passing tests on your machine is not enough evidence and code must run against real dependencies, published local repositories, and rewritten URLs without touching the host
+  Stands up an isolated, realistic environment from a profile on Docker Compose so software can be cloned, installed, run, and experienced like a real user would, without touching the host. Use when passing tests on your machine is not enough evidence and code must be exercised as though actually deployed
 use_cases:
-  - >-
-    Stands up an isolated, realistic environment from a profile on Docker Compose so software can be tested as though actually deployed. Use when passing tests on your machine is not enough evidence and code must run against real dependencies, published local repositories, and rewritten URLs without touching the host
+  - Drive a CLI such as OpenAI Codex as a real user would, with its config files and API keys provisioned, without touching the local setup
+  - Run a web app against real dependencies such as Postgres and open it from the host's browser as if it were deployed
+  - Install and exercise unpublished local repositories as though they were already on GitHub
+  - Reproduce a failure in a disposable environment that leaves the host untouched
 platforms:
   - linux
   - macos
   - windows
 requires:
+  - name: docker
+    purpose: >-
+      Every universe is a Docker Compose project. Without Docker nothing can be launched;
+      `dtu-lite check` reports whether it is present and usable, and `dtu-lite install` offers
+      to install it.
+    install: https://docs.docker.com/get-started/get-docker/
   - name: gh
     purpose: >-
       Generates the token that signs in to GitHub Copilot. Without it, the model-backed
@@ -26,14 +34,29 @@ requires:
     install: https://github.com/github/copilot-cli#prerequisites
 ---
 
-Stands up an isolated, realistic environment from a profile on Docker Compose so software can be tested as though actually deployed. Use when passing tests on your machine is not enough evidence and code must run against real dependencies, published local repositories, and rewritten URLs without touching the host.
+Stands up an isolated, realistic environment from a profile on Docker Compose so software can be cloned, installed, run, and experienced like a real user would, without touching the host. Use when passing tests on your machine is not enough evidence and code must be exercised as though actually deployed.
 
 **The library is the tool.** `dtu_lite.lib` holds every capability. The CLI is a thin
 wrapper over it, so anything you can do from the shell you can also do from Python.
 
 ## When to reach for it
 
-- Stands up an isolated, realistic environment from a profile on Docker Compose so software can be tested as though actually deployed. Use when passing tests on your machine is not enough evidence and code must run against real dependencies, published local repositories, and rewritten URLs without touching the host.
+- Passing tests on your machine is not enough evidence, and the code has to run against the
+  dependencies, ports, and network it is deployed with.
+- A CLI has to be driven the way a person would: `exec` opens a shell in the twin as the
+  provisioned user, with config files in place and API keys passed through from the host.
+- Something running in the twin has to be reached from the host: exposed ports are forwarded to
+  `http://localhost:<port>` and `launch` reports the URLs.
+- Local repositories are not published yet, and you want to install them over `https://` as if
+  they already were.
+- A host must stay untouched: no DNS changes, no firewall rules, no daemons beyond Docker.
+
+## Command surfaces
+
+Deterministic commands (`check`, `validate-profile`, `launch`, `list`, `status`, `exec`,
+`file-push`, `file-pull`, `destroy`) run with no model provider configured. Smart commands
+(`install`, `create-profile`, `doctor`) are model-backed and say so in their help text. Serve
+commands (`dashboard`) run a local web UI over the same library.
 
 ## Before writing code
 
@@ -57,13 +80,17 @@ Verify with `dtu-lite manifest`, which needs no credentials.
 
 ## Prerequisites
 
-Deterministic capabilities need only `uv`. Model-backed capabilities run through GitHub
+Docker is what universes are built on: `dtu-lite check` reports whether it is present and
+usable, and `dtu-lite install` offers to install it through the platform's package manager.
+
+Deterministic capabilities need only `uv` and Docker. Model-backed capabilities run through GitHub
 Copilot, signed in as the GitHub CLI's user: `gh` must be installed and `gh auth login`
 completed with an account that has a Copilot subscription. Without that, a model-backed
 capability fails immediately and names what to configure; it never falls back to a
 deterministic answer.
 
-Runs on Linux, macOS, and Windows.
+Runs on Linux, macOS, and Windows. The twin is a Linux container everywhere by default; on
+Windows a profile can opt into Windows containers.
 
 ## Straight and smart paths
 

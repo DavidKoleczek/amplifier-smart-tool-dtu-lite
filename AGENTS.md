@@ -58,3 +58,8 @@ The repositories are (add to the list as more are needed, the one exception to m
 - https://github.com/microsoft/amplifier-smart-tools
 - https://github.com/github/copilot-sdk
 - https://github.com/agentskills/agentskills
+- https://github.com/microsoft/amplifier-bundle-digital-twin-universe
+- https://github.com/microsoft/amplifier-bundle-gitea
+- https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe
+- https://github.com/docker/docs
+- https://github.com/DavidKoleczek/mybench-smart-tool
