@@ -1,0 +1,5 @@
+{
+  "manifest": "src/dtu_lite/SMART_TOOL.md",
+  "cli_argv": ["dtu-lite"],
+  "deterministic_smoke": ["manifest"]
+}
