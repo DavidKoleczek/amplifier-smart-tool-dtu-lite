@@ -1,5 +1,7 @@
 """Command line entry point for DTU Lite."""
 
+import json
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -69,6 +71,25 @@ def launch(
     typer.echo(lib.launch(profile, timeout_seconds).model_dump_json(indent=2))
 
 
+@app.command("list")
+def list_() -> None:
+    """List every universe launched from this machine, oldest first, measured now. Deterministic.
+
+    Prints a JSON array of universes; an empty machine prints `[]`.
+    """
+    universes = lib.list_universes()
+    typer.echo(json.dumps([universe.model_dump(mode="json") for universe in universes], indent=2))
+
+
+@app.command()
+def status(id: Annotated[str, typer.Option(help="The universe id `launch` printed.")]) -> None:
+    """Measure one universe now: its state, services, and the URLs the host can open. Deterministic.
+
+    Prints the universe as JSON, the same shape `launch` printed.
+    """
+    typer.echo(lib.status(id).model_dump_json(indent=2))
+
+
 @app.command("exec")
 def exec_(
     id: Annotated[str, typer.Option(help="The universe id `launch` printed.")],
@@ -89,6 +110,36 @@ def exec_(
     result = lib.execute(id, command, user, workdir, timeout_seconds)
     typer.echo(result.model_dump_json(indent=2))
     raise typer.Exit(code=result.exit_code)
+
+
+@app.command("file-push")
+def file_push(
+    id: Annotated[str, typer.Option(help="The universe id `launch` printed.")],
+    source: Annotated[Path, typer.Option(help="A file or directory on the host.")],
+    destination: Annotated[
+        str, typer.Option(help="A path in the twin; `docker cp` rules decide where the copy lands.")
+    ],
+) -> None:
+    """Copy a file or directory from the host into the twin, owned by the twin's user. Deterministic.
+
+    Prints the transfer as JSON: where the copy landed and how many files it holds.
+    """
+    typer.echo(lib.push_files(id, source, destination).model_dump_json(indent=2))
+
+
+@app.command("file-pull")
+def file_pull(
+    id: Annotated[str, typer.Option(help="The universe id `launch` printed.")],
+    source: Annotated[str, typer.Option(help="A file or directory in the twin.")],
+    destination: Annotated[
+        Path, typer.Option(help="A path on the host; `docker cp` rules decide where the copy lands.")
+    ],
+) -> None:
+    """Copy a file or directory from the twin onto the host. Deterministic.
+
+    Prints the transfer as JSON: where the copy landed and how many files it holds.
+    """
+    typer.echo(lib.pull_files(id, source, destination).model_dump_json(indent=2))
 
 
 @app.command()

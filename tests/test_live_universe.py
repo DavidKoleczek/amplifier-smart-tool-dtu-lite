@@ -52,6 +52,9 @@ def test_launch_exec_destroy_round_trip(tmp_path: Path, state_root: Path) -> Non
         assert [url.url for url in universe.urls] == ["http://localhost:18590/"]
         assert (state_root / universe.id / "universe.json").is_file()
 
+        assert lib.status(universe.id) == universe
+        assert [listed.id for listed in lib.list_universes()] == [universe.id]
+
         result = lib.execute(universe.id, "echo out; echo err >&2; exit 4")
         assert (result.exit_code, result.stdout, result.stderr) == (4, "out\n", "err\n")
 
@@ -67,9 +70,50 @@ def test_launch_exec_destroy_round_trip(tmp_path: Path, state_root: Path) -> Non
     assert f"{universe.id}-box-1" in destroyed.removed
     assert f"{universe.id}_default" in destroyed.removed
     assert not (state_root / universe.id).exists()
+    assert lib.list_universes() == []
     with pytest.raises(DtuLiteError) as raised:
         lib.execute(universe.id, "true")
     assert raised.value.code == "universe-not-found"
+
+
+@needs_docker
+def test_pushed_files_land_by_docker_cp_rules_owned_by_the_twins_user_and_pull_back(
+    tmp_path: Path, state_root: Path
+) -> None:
+    profile = tmp_path / "compose.yaml"
+    profile.write_text(ALPINE_PROFILE.format(port=18592).replace("command:", 'user: "1000:1000"\n    command:'))
+    source = tmp_path / "src"
+    (source / "nested").mkdir(parents=True)
+    (source / "a.txt").write_text("a")
+    (source / "nested" / "b.txt").write_text("b")
+
+    universe = lib.launch(profile, timeout_seconds=120)
+    try:
+        into_existing = lib.push_files(universe.id, source, "/tmp")
+        assert (into_existing.destination, into_existing.files) == ("/tmp/src", 2)
+
+        to_new_path = lib.push_files(universe.id, source / "a.txt", "/tmp/renamed.txt")
+        assert (to_new_path.destination, to_new_path.files) == ("/tmp/renamed.txt", 1)
+
+        owners = lib.execute(universe.id, "stat -c '%u:%g %n' /tmp/src /tmp/src/nested/b.txt /tmp/renamed.txt")
+        assert owners.stdout == "1000:1000 /tmp/src\n1000:1000 /tmp/src/nested/b.txt\n1000:1000 /tmp/renamed.txt\n"
+
+        lib.execute(universe.id, "echo c > /tmp/src/c.txt")
+        pulled = lib.pull_files(universe.id, "/tmp/src", tmp_path)
+        assert (pulled.destination, pulled.files) == (str(tmp_path / "src"), 3)
+        assert (tmp_path / "src" / "c.txt").read_text() == "c\n"
+
+        with pytest.raises(DtuLiteError) as raised:
+            lib.push_files(universe.id, tmp_path / "missing", "/tmp")
+        assert raised.value.code == "source-not-found"
+        with pytest.raises(DtuLiteError) as raised:
+            lib.pull_files(universe.id, "/tmp/missing", tmp_path)
+        assert raised.value.code == "source-not-found"
+        with pytest.raises(DtuLiteError) as raised:
+            lib.push_files(universe.id, source / "a.txt", "/no/such/parent/a.txt")
+        assert raised.value.code == "transfer-failed"
+    finally:
+        lib.destroy(universe.id)
 
 
 @needs_docker

@@ -54,7 +54,8 @@ wrapper over it, so anything you can do from the shell you can also do from Pyth
 ## Command surfaces
 
 Deterministic commands run with no model provider configured. Today those are `check`,
-`launch`, `exec`, and `destroy`; the capability list below is authoritative. Smart commands are
+`launch`, `list`, `status`, `exec`, `file-push`, `file-pull`, and `destroy`; the capability
+list below is authoritative. Smart commands are
 model-backed and say so in their help text. Serve commands run a local web UI over the same
 library.
 
@@ -78,6 +79,9 @@ export GH_TOKEN="$(gh auth token)"          # the profile reads it at launch, ne
 dtu-lite launch --profile copilot-cli       # prints the universe, with its id
 dtu-lite exec --id <id> --command 'copilot --version'
 dtu-lite exec --id <id>                     # interactive shell as the twin's user
+dtu-lite file-push --id <id> --source ./src --destination /home/user
+dtu-lite file-pull --id <id> --source /home/user/out.log --destination ./
+dtu-lite status --id <id>                   # measured now; `list` shows every universe
 dtu-lite destroy --id <id>
 ```
 

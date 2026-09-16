@@ -5,10 +5,12 @@ from pathlib import Path
 from dtu_lite.capabilities.check import check as check_module
 from dtu_lite.capabilities.universe import destroy as destroy_module
 from dtu_lite.capabilities.universe import execute as execute_module
+from dtu_lite.capabilities.universe import files as files_module
 from dtu_lite.capabilities.universe import launch as launch_module
+from dtu_lite.capabilities.universe import status as status_module
 from dtu_lite.core import manifest
 from dtu_lite.core import skill as skill_module
-from dtu_lite.schemas import Destroyed, ExecResult, HostReport, Manifest, Universe
+from dtu_lite.schemas import Destroyed, ExecResult, HostReport, Manifest, Transfer, Universe
 
 
 def load_manifest() -> Manifest:
@@ -46,6 +48,16 @@ def launch(profile: str | Path, timeout_seconds: int = 600) -> Universe:
     return launch_module.launch(profile, timeout_seconds)
 
 
+def list_universes() -> list[Universe]:
+    """Every universe launched from this machine, oldest first, each measured against Docker now."""
+    return status_module.list_universes()
+
+
+def status(id: str) -> Universe:
+    """One universe, measured against Docker now."""
+    return status_module.status(id)
+
+
 def execute(
     id: str,
     command: str,
@@ -60,6 +72,16 @@ def execute(
 def shell(id: str, user: str | None = None, workdir: str | None = None) -> int:
     """An interactive shell in the twin, attached to this terminal; returns its exit code."""
     return execute_module.shell(id, user, workdir)
+
+
+def push_files(id: str, source: Path, destination: str) -> Transfer:
+    """Copy a host file or directory into the twin with `docker cp` semantics, owned by the twin's user."""
+    return files_module.push_files(id, source, destination)
+
+
+def pull_files(id: str, source: str, destination: Path) -> Transfer:
+    """Copy a file or directory out of the twin onto the host with `docker cp` semantics."""
+    return files_module.pull_files(id, source, destination)
 
 
 def destroy(id: str) -> Destroyed:

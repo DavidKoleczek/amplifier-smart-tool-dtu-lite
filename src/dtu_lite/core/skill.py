@@ -23,8 +23,28 @@ CAPABILITIES = (
         model_backed=False,
     ),
     Capability(
+        "list",
+        "List every universe launched from this machine, running or not, measured now.",
+        model_backed=False,
+    ),
+    Capability(
+        "status",
+        "Measure one universe now: its state, services, and the URLs the host can open.",
+        model_backed=False,
+    ),
+    Capability(
         "exec",
         "Run a command in the twin as its user through a login shell, or open an interactive shell in it.",
+        model_backed=False,
+    ),
+    Capability(
+        "file-push",
+        "Copy a file or directory from the host into the twin, owned by the twin's user.",
+        model_backed=False,
+    ),
+    Capability(
+        "file-pull",
+        "Copy a file or directory from the twin onto the host.",
         model_backed=False,
     ),
     Capability(
@@ -35,11 +55,11 @@ CAPABILITIES = (
 )
 
 # Paths relative to the skill directory. All ship inside the package, so all resolve after installation.
+# An example is listed by its compose.yaml alone; it names the Dockerfile and anything else beside it.
 SKILL_RESOURCES = (
     "SMART_TOOL.md",
     "lib.py",
     "examples/copilot-cli/compose.yaml",
-    "examples/copilot-cli/Dockerfile",
 )
 
 

@@ -4,7 +4,7 @@ import subprocess
 import sys
 
 from dtu_lite.capabilities.universe import state
-from dtu_lite.capabilities.universe.compose import compose_client, docker_unavailable, project_containers, service_name
+from dtu_lite.capabilities.universe.compose import compose_client, docker_unavailable, running_twin
 from dtu_lite.schemas import DtuLiteError, ExecResult
 
 # A login shell, so PATH changes an installer made in ~/.profile apply as they would in a person's terminal.
@@ -54,14 +54,7 @@ def shell(id: str, user: str | None = None, workdir: str | None = None) -> int:
 def _exec_argv(id: str, user: str | None, workdir: str | None, tty: bool) -> list[str]:
     """`docker compose -p <id> exec ... <twin>`, after confirming the twin is running."""
     record = state.read(id)
-    twin = next((c for c in project_containers(id) if service_name(c) == record.twin_machine), None)
-    if twin is None or twin.state.status != "running":
-        found = "not present" if twin is None else twin.state.status
-        raise DtuLiteError(
-            "twin-not-running",
-            f"The twin {record.twin_machine!r} of universe {id} is {found}.",
-            f"Inspect it with `docker compose -p {id} ps` and `logs`, or destroy and launch again.",
-        )
+    running_twin(record)
     argv = [str(part) for part in compose_client(id).compose.docker_compose_cmd] + ["exec"]
     if not tty:
         argv.append("--no-TTY")

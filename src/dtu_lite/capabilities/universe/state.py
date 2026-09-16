@@ -51,6 +51,14 @@ def read(id: str) -> UniverseRecord:
     return UniverseRecord.model_validate_json(path.read_text(encoding="utf-8"))
 
 
+def read_all() -> list[UniverseRecord]:
+    """Every record on this machine, oldest first. An empty or absent state root is an empty list."""
+    if not STATE_ROOT.is_dir():
+        return []
+    records = [read(path.name) for path in STATE_ROOT.iterdir() if (path / RECORD_FILE).is_file()]
+    return sorted(records, key=lambda record: record.created_at)
+
+
 def _not_found_remedy(id: str) -> str:
     """Image and container names start with the universe id, so a longer id is usually one of those."""
     known = sorted(path.name for path in STATE_ROOT.iterdir()) if STATE_ROOT.is_dir() else []

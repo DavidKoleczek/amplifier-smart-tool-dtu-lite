@@ -12,6 +12,7 @@ Everything that touches Docker goes through [python-on-whales](https://github.co
 It is the only maintained Python route to `docker compose`; the official `docker` SDK speaks the Engine API and has no Compose support, and Compose is what a universe is.
 The trade is that the Docker CLI must be on `PATH`, which Docker Desktop and Docker Engine both provide and `check` confirms.
 The one place the library runs the CLI itself is `execute` and `shell`: they take the `docker compose ... exec` command python-on-whales builds and run it through `subprocess`, since that is where a timeout, the exit code, and the caller's terminal are.
+File transfers use `docker cp` rather than `docker compose cp`, which fails on whole directories.
 
 ## Failures
 
@@ -68,7 +69,7 @@ When nothing is found, the capability raises `profile-not-found`, saying what it
 
 ## Examples
 
-`examples/` in the installed package holds profiles that are complete and known to launch. Each is a directory under the examples root, in the same shape as `.agents/digital-twin-universe/<name>/`, and the skill lists its files under `<skill_resources>` so an agent reading `--help` can open them.
+`examples/` in the installed package holds profiles that are complete and known to launch. Each is a directory under the examples root, in the same shape as `.agents/digital-twin-universe/<name>/`, and the skill lists its `compose.yaml` under `<skill_resources>` so an agent reading `--help` can open it and find the `Dockerfile` and anything else it names beside it.
 
 ```
 examples/
@@ -120,6 +121,7 @@ Raises `profile-not-found` and `docker-unavailable`.
 A universe is one Compose project. Its `id` is the project's name, `dtu-<profile name>-<4 hex>`, so `docker compose -p <id> logs` reaches the same stack by hand and `list` can tell two launches of one profile apart.
 
 What the tool renders for a universe lives in its state directory, `~/.dtu-lite/universes/<id>/`: `dtu.yaml`, the overlay (not yet rendered), and `universe.json`, the record: id, name, description, profile path, twin, and creation time. Everything else about a universe is in Docker.
+The record is how an id leads back to a universe: every capability that takes an `id` reads it first and raises `universe-not-found` when it is missing. A stack whose directory was deleted by hand is no longer a universe to the tool; `docker compose -p <id> down --volumes` clears it.
 
 Every capability that acts on a universe returns this:
 
@@ -178,23 +180,19 @@ Raises:
 
 ## List
 
-Not yet implemented.
-
-Every universe on this machine, running or not.
+Every universe launched from this machine, running or not, oldest first.
 
 ```python
 def list_universes() -> list[Universe]
 ```
 
-Universes are found by Docker label, so one whose state directory was deleted still appears, with `state_path` pointing at where the directory should be. An empty machine returns an empty list.
+Every record in the state directory, each measured against Docker in one pass. A universe whose containers are gone appears as `stopped` with no services. An empty machine returns an empty list without touching Docker.
 
 Raises `docker-unavailable`.
 
 ## Status
 
-Not yet implemented; `launch` returns the same measurement.
-
-One universe, measured now.
+One universe, measured now. `launch` returns the same measurement.
 
 ```python
 def status(id: str) -> Universe
@@ -242,8 +240,6 @@ Raises `universe-not-found`, `twin-not-running`, `docker-unavailable`, and `no-t
 
 ## Push and pull files
 
-Not yet implemented.
-
 Copy between the host and the twin.
 
 ```python
@@ -254,14 +250,14 @@ def pull_files(id: str, source: str, destination: Path) -> Transfer
 ```python
 class Transfer:
     source: str
-    destination: str
-    files: int  # how many were copied
+    destination: str  # where the copy landed, after the rules below
+    files: int  # how many files were copied; a file counts one
 ```
 
-Same rules as `docker cp`: a file lands at the destination path; a directory is created at the destination when nothing is there, or placed inside it when a directory already is.
+Same rules as `docker cp`: when the destination is an existing directory the source is placed inside it under its own name, otherwise the source lands at the destination path itself, and the destination's parent must exist. A path in the twin is resolved against `/`, as `docker cp` does, not the twin's working directory.
 Pushed files end up owned by the twin's user. `docker cp` alone would leave them owned by `root`, which is a trap when the twin runs as a user.
 
-Raises `universe-not-found`, `twin-not-running`, `source-not-found`, and `docker-unavailable`.
+Raises `universe-not-found`, `twin-not-running`, `source-not-found` (the host path for a push, the twin path for a pull), `transfer-failed` (what `docker cp` refused, with its message), and `docker-unavailable`.
 
 ## Destroy
 

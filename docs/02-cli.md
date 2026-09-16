@@ -39,6 +39,22 @@ dtu-lite launch --profile <name-or-path> [--timeout-seconds 600]
 
 `lib.launch()`, printed as JSON. Compose's progress goes to stderr while it runs, so the JSON on stdout stays clean. Exits 1 with the cause and remedy on any launch failure; the remedy names the `destroy` command that clears whatever started.
 
+## dtu-lite list
+
+```bash
+dtu-lite list
+```
+
+`lib.list_universes()`, printed as a JSON array. An empty machine prints `[]` and exits 0.
+
+## dtu-lite status
+
+```bash
+dtu-lite status --id <id>
+```
+
+`lib.status()`, printed as JSON in the same shape `launch` prints.
+
 ## dtu-lite exec
 
 ```bash
@@ -49,6 +65,15 @@ dtu-lite exec --id <id> [--user <user>] [--workdir <path>]
 With `--command`, `lib.execute()`: prints the `ExecResult` as JSON and exits with the command's own exit code, so `dtu-lite exec ... --command "curl -sf ..." && ...` does the right thing. The JSON is on stdout whatever the code.
 
 Without `--command`, `lib.shell()`: attaches an interactive shell to the terminal, prints nothing, and exits with the shell's exit code. Without a terminal it exits 1 with `no-tty`.
+
+## dtu-lite file-push and file-pull
+
+```bash
+dtu-lite file-push --id <id> --source <host path> --destination <twin path>
+dtu-lite file-pull --id <id> --source <twin path> --destination <host path>
+```
+
+`lib.push_files()` and `lib.pull_files()`, printed as JSON. Exits 1 with `source-not-found` when the source is missing on its side, and `transfer-failed` when `docker cp` refuses the paths.
 
 ## dtu-lite destroy
 

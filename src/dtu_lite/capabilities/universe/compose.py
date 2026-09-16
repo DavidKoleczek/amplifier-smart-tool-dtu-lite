@@ -47,9 +47,35 @@ def project_containers(project: str) -> list[Container]:
         raise translate_docker_error(error) or error from error
 
 
-def measure(record: UniverseRecord) -> Universe:
-    """The universe a record describes, as Docker reports it now."""
-    containers = project_containers(record.id)
+def compose_containers() -> dict[str, list[Container]]:
+    """Every Compose-managed container on the host, running or not, grouped by project name."""
+    try:
+        containers = compose_client().container.list(all=True, filters=[("label", PROJECT_LABEL)])
+    except (ClientNotFoundError, DockerException) as error:
+        raise translate_docker_error(error) or error from error
+    grouped: dict[str, list[Container]] = {}
+    for container in containers:
+        grouped.setdefault((container.config.labels or {})[PROJECT_LABEL], []).append(container)
+    return grouped
+
+
+def running_twin(record: UniverseRecord) -> Container:
+    """The twin's container, or `twin-not-running` with the state it is in instead."""
+    twin = next((c for c in project_containers(record.id) if service_name(c) == record.twin_machine), None)
+    if twin is None or twin.state.status != "running":
+        found = "not present" if twin is None else twin.state.status
+        raise DtuLiteError(
+            "twin-not-running",
+            f"The twin {record.twin_machine!r} of universe {record.id} is {found}.",
+            f"Inspect it with `docker compose -p {record.id} ps` and `logs`, or destroy and launch again.",
+        )
+    return twin
+
+
+def measure(record: UniverseRecord, containers: list[Container] | None = None) -> Universe:
+    """The universe a record describes, as Docker reports it now. `containers` skips the lookup when already listed."""
+    if containers is None:
+        containers = project_containers(record.id)
     services = [_service(container) for container in containers]
     twin = next((container for container in containers if service_name(container) == record.twin_machine), None)
     return Universe(

@@ -138,6 +138,14 @@ class ExecResult(BaseModel):
     stderr: str
 
 
+class Transfer(BaseModel):
+    """What one push or pull copied, with `docker cp` semantics for where it landed."""
+
+    source: str
+    destination: str = Field(description="Where the copy landed: inside an existing directory, or at the path itself")
+    files: int = Field(description="How many files were copied; a directory counts its files, a file counts one")
+
+
 class Destroyed(BaseModel):
     """What `destroy` took down."""
 

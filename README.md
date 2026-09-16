@@ -61,9 +61,17 @@ dtu-lite check
 # Launch a universe from a profile name or Compose file and wait until it is ready
 dtu-lite launch --profile <name-or-path>
 
+# Every universe on this machine, or one measured now
+dtu-lite list
+dtu-lite status --id <id>
+
 # Run a command in the twin, or open a shell in it
 dtu-lite exec --id <id> --command "<command>"
 dtu-lite exec --id <id>
+
+# Copy files in and out of the twin
+dtu-lite file-push --id <id> --source ./src --destination /workspace
+dtu-lite file-pull --id <id> --source /var/log/app.log --destination ./
 
 # Take it down
 dtu-lite destroy --id <id>

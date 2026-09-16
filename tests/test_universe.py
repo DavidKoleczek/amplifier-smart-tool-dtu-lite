@@ -13,7 +13,7 @@ from dtu_lite.capabilities.universe import state
 from dtu_lite.capabilities.universe.compose import universe_state
 from dtu_lite.capabilities.universe.state import UniverseRecord
 from dtu_lite.cli import app, main
-from dtu_lite.schemas import Destroyed, DtuLiteError, ExecResult, Health, Service
+from dtu_lite.schemas import Destroyed, DtuLiteError, ExecResult, Health, Service, Transfer, Universe
 
 runner = CliRunner()
 
@@ -60,6 +60,18 @@ def test_a_written_record_reads_back_and_is_gone_after_remove(state_root: Path) 
         state.read(record.id)
     assert raised.value.code == "universe-not-found"
     assert record.id in raised.value.message
+
+
+def test_read_all_is_every_record_oldest_first_and_empty_without_a_state_root(state_root: Path) -> None:
+    assert state.read_all() == []
+
+    newer, older = _record("dtu-demo-1111"), _record("dtu-demo-0000")
+    older = older.model_copy(update={"created_at": older.created_at.replace(year=2000)})
+    state.write(newer)
+    state.write(older)
+    (state_root / "stray-file").write_text("not a universe")
+
+    assert [record.id for record in state.read_all()] == ["dtu-demo-0000", "dtu-demo-1111"]
 
 
 def test_an_image_or_container_name_is_pointed_back_at_its_universe_id(state_root: Path) -> None:
@@ -153,6 +165,72 @@ def test_exec_without_a_command_opens_a_shell(monkeypatch: pytest.MonkeyPatch) -
 
     assert result.exit_code == 3
     assert result.stdout == ""
+
+
+def _universe(id: str) -> Universe:
+    record = _record(id)
+    return Universe(
+        id=record.id,
+        name=record.name,
+        description=record.description,
+        profile_path=record.profile_path,
+        twin_machine=record.twin_machine,
+        state="stopped",
+        services=[],
+        urls=[],
+        state_path=record.state_path,
+        created_at=record.created_at,
+    )
+
+
+def test_list_prints_a_json_array_of_universes(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(lib, "list_universes", lambda: [_universe("dtu-demo-0000"), _universe("dtu-demo-1111")])
+
+    result = runner.invoke(app, ["list"])
+
+    assert result.exit_code == 0
+    assert [universe["id"] for universe in json.loads(result.stdout)] == ["dtu-demo-0000", "dtu-demo-1111"]
+
+
+def test_list_of_nothing_is_an_empty_array(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(lib, "list_universes", list)
+
+    result = runner.invoke(app, ["list"])
+
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == []
+
+
+def test_status_prints_the_universe(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(lib, "status", _universe)
+
+    result = runner.invoke(app, ["status", "--id", "dtu-demo-0000"])
+
+    assert result.exit_code == 0
+    assert json.loads(result.stdout)["id"] == "dtu-demo-0000"
+    assert json.loads(result.stdout)["state"] == "stopped"
+
+
+def test_file_push_and_pull_pass_their_arguments_through(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_push(id: str, source: Path, destination: str) -> Transfer:
+        seen.update(push=(id, source, destination))
+        return Transfer(source=str(source), destination=destination, files=1)
+
+    def fake_pull(id: str, source: str, destination: Path) -> Transfer:
+        seen.update(pull=(id, source, destination))
+        return Transfer(source=source, destination=str(destination), files=1)
+
+    monkeypatch.setattr(lib, "push_files", fake_push)
+    monkeypatch.setattr(lib, "pull_files", fake_pull)
+
+    pushed = runner.invoke(app, ["file-push", "--id", "dtu-demo-0000", "--source", "./src", "--destination", "/w"])
+    pulled = runner.invoke(app, ["file-pull", "--id", "dtu-demo-0000", "--source", "/var/log/a", "--destination", "."])
+
+    assert (pushed.exit_code, pulled.exit_code) == (0, 0)
+    assert seen == {"push": ("dtu-demo-0000", Path("src"), "/w"), "pull": ("dtu-demo-0000", "/var/log/a", Path())}
+    assert json.loads(pushed.stdout) == {"source": "src", "destination": "/w", "files": 1}
 
 
 def test_destroy_prints_what_was_removed(monkeypatch: pytest.MonkeyPatch) -> None:
