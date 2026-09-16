@@ -41,6 +41,18 @@ def manifest() -> None:
     typer.echo(lib.load_manifest().model_dump_json(indent=2))
 
 
+@app.command()
+def check() -> None:
+    """Report whether this host can run a universe: Docker CLI, daemon, and Compose plugin. Deterministic.
+
+    Prints the report as JSON. Exits 0 when everything is present, 1 when something is missing.
+    """
+    report = lib.check()
+    typer.echo(report.model_dump_json(indent=2))
+    if not report.ok:
+        raise typer.Exit(code=1)
+
+
 def main() -> int:
     try:
         app()

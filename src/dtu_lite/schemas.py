@@ -52,3 +52,29 @@ class Capability(NamedTuple):
 
 
 # endregion
+
+# region: Check
+
+Platform = Literal["linux", "macos", "windows"]
+
+
+class Prerequisite(BaseModel):
+    """One thing a universe needs from the host, measured."""
+
+    name: str
+    present: bool
+    detail: str = Field(description="The version when present, otherwise what the probe saw")
+    remedy: str | None = Field(default=None, description="How to make it present, set only when it is not")
+
+
+class HostReport(BaseModel):
+    """Whether this host can run a universe, and why not when it cannot."""
+
+    platform: Platform
+    ok: bool
+    docker_version: str | None
+    compose_version: str | None
+    prerequisites: list[Prerequisite]
+
+
+# endregion

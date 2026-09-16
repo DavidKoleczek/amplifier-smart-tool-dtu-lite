@@ -64,3 +64,4 @@ The repositories are (add to the list as more are needed, the one exception to m
 - https://github.com/docker/docs
 - https://github.com/DavidKoleczek/mybench-smart-tool
 - https://github.com/DavidKoleczek/amplifier-smart-tool-creator
+- https://github.com/gabrieldemarmiesse/python-on-whales

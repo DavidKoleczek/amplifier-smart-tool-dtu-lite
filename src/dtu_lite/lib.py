@@ -2,9 +2,10 @@
 
 from pathlib import Path
 
+from dtu_lite.capabilities.check import check as check_module
 from dtu_lite.core import manifest
 from dtu_lite.core import skill as skill_module
-from dtu_lite.schemas import Manifest
+from dtu_lite.schemas import HostReport, Manifest
 
 
 def load_manifest() -> Manifest:
@@ -30,3 +31,8 @@ def skill_resources() -> list[str]:
 def repository_url() -> str | None:
     """The tool's canonical source, from the package metadata, or None when the package declares none."""
     return skill_module.repository_url()
+
+
+def check() -> HostReport:
+    """Whether this host can run a universe: the Docker CLI, a reachable daemon, and the Compose plugin."""
+    return check_module.check()

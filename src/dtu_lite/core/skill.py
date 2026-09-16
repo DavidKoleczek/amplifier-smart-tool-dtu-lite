@@ -10,7 +10,14 @@ DISTRIBUTION = "dtu-lite"
 
 # One table drives the skill's capability list, so it cannot drift from what the CLI exposes.
 # Every capability added to the library gets a row here.
-CAPABILITIES = (Capability("manifest", "Print the tool's manifest as JSON.", model_backed=False),)
+CAPABILITIES = (
+    Capability("manifest", "Print the tool's manifest as JSON.", model_backed=False),
+    Capability(
+        "check",
+        "Report whether this host can run a universe: Docker CLI, daemon, and Compose plugin.",
+        model_backed=False,
+    ),
+)
 
 # Paths relative to the skill directory. Both ship inside the package, so both resolve after installation.
 SKILL_RESOURCES = ("SMART_TOOL.md", "lib.py")

@@ -44,6 +44,22 @@ On Linux and macOS the twin is a Linux container.
 On Windows it is a Linux container by default, and a profile can opt into Windows containers when the software under test needs Windows itself, such as a `.exe` installer or PowerShell-first tooling. 
 Both modes render the same kind of `compose.yaml` and answer to the same commands.
 
+## Validating DTU Lite with itself
+
+DTU Lite is held to its own standard: it is verified inside a universe, as a real user would install and run it, not on the machine it was developed on. 
+
+A profile can ask for a Docker daemon inside the twin. 
+The twin then runs a nested daemon (Docker-in-Docker) and any universe launched from within it lives entirely inside that daemon: the host's Docker sees one privileged container, nothing else. 
+The self-validation profile publishes this repository through Gitea and rewrites its GitHub URL, so `uv tool install git+https://github.com/...` inside the twin installs the local checkout as if it were released. 
+`exec` then drives `dtu-lite check`, `launch`, `exec`, and `destroy` against a sample profile, and a port the sample exposes is chained out through the twin so the host's browser reaches the inner universe.
+
+Constraints this sets:
+
+- The nested daemon is opt-in per profile, never on by default. It requires a privileged twin, since Docker alone offers no unprivileged path, and a privileged twin weakens the container boundary; the profile says so where it asks for it.
+- Only a Linux twin can host a nested daemon. Windows containers cannot.
+- `launch` inside the twin reports `localhost` URLs that are true inside the twin; the outer profile must expose the same port for the host to reach them.
+- The inner daemon starts with an empty image cache, so the sample profile pulls its images on first use unless the profile keeps `/var/lib/docker` on a named volume.
+
 ## Goals
 
 - Docker is the only prerequisite. `check` reports whether it is present and usable. `install` offers to install Docker Desktop or Docker Engine through the platform's package manager (winget, brew, apt/dnf) and only acts with explicit consent. If the system does not allow it, `install` says exactly what to do by hand.
@@ -87,7 +103,7 @@ dtu-lite dashboard
 ## Non-Goals
 
 - Compatibility with the original Digital Twin Universe's profiles, engine, or Incus-based environments.
-- VM-level isolation or kernel fidelity. A twin is a container; software that needs its own kernel, systemd as PID 1, or nested virtualization is out of scope.
+- VM-level isolation or kernel fidelity. A twin is a container; software that needs its own kernel, systemd as PID 1, or nested virtualization is out of scope. A nested Docker daemon is not virtualization and is in scope as an opt-in.
 - Running universes on remote or multiple hosts.
 - Managing Docker beyond installing it and confirming it works.
 

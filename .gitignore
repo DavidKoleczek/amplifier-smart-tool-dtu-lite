@@ -1,5 +1,6 @@
 reference/
 temp/
+notes/
 .env
 
 # From https://github.com/github/gitignore/blob/main/Python.gitignore

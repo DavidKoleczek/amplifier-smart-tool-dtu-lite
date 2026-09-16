@@ -60,6 +60,8 @@ commands (`dashboard`) run a local web UI over the same library.
 
 ## Before writing code
 
+Run `dtu-lite check` first. It reports whether Docker is present and usable and exits 1 with a
+`remedy` per missing prerequisite when it is not; nothing else in the tool works until it passes.
 Confirm every capability and argument against `dtu-lite <command> --help` before using it.
 Do not fill gaps from memory. The library source beside this file, `lib.py`, carries the
 signatures. The repository's `docs/01-library.md` and `docs/02-cli.md` carry the rest.

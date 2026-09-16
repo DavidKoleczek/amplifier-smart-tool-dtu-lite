@@ -54,6 +54,9 @@ Verify an install with `dtu-lite manifest`, which needs no prerequisites and no 
 ```bash
 # Print the tool's manifest as JSON
 dtu-lite manifest
+
+# Report whether this host can run a universe: Docker CLI, daemon, and Compose plugin
+dtu-lite check
 ```
 
 See the [CLI reference](docs/02-cli.md) for every flag and the [library reference](docs/01-library.md) for the Python surface.

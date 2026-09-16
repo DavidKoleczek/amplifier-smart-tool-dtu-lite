@@ -3,6 +3,26 @@
 Every capability of DTU Lite is reachable from `dtu_lite.lib`.
 All other surfaces, including the CLI, are thin wrappers over the library and add no capability of their own.
 
+## Docker access
+
+Everything that touches Docker goes through [python-on-whales](https://github.com/gabrieldemarmiesse/python-on-whales), which drives the `docker` CLI and its Compose plugin from Python with typed results.
+It is the only maintained Python route to `docker compose`; the official `docker` SDK speaks the Engine API and has no Compose support, and Compose is what a universe is.
+The trade is that the Docker CLI must be on `PATH`, which Docker Desktop and Docker Engine both provide and `check` confirms.
+
+## Check
+
+Whether this host can run a universe: the Docker CLI on `PATH`, a daemon answering behind it, and the Compose plugin.
+Deterministic; needs no model provider and never raises for a missing prerequisite, since a missing prerequisite is the answer.
+
+```python
+def check() -> HostReport
+```
+
+`HostReport` carries `platform` (`linux`, `macos`, or `windows`), `ok`, `docker_version`, `compose_version`, and `prerequisites`.
+The probes run in dependency order, `docker-cli`, `docker-daemon`, `docker-compose`, and stop at the first one missing, so `prerequisites` lists only what was measured.
+Each `Prerequisite` has `name`, `present`, `detail` (the version or path when present, otherwise what the probe saw), and `remedy`, set only when it is not present and saying what to do.
+`docker_version` and `compose_version` are `None` until their probe passes.
+
 ## Intelligence
 
 Model-backed capabilities run through the `Intelligence` protocol in `dtu_lite.intelligence.interface`:

@@ -23,6 +23,14 @@ dtu-lite manifest
 
 `lib.load_manifest()`, printed as JSON.
 
+## dtu-lite check
+
+```bash
+dtu-lite check
+```
+
+`lib.check()`, printed as JSON. Exits 0 when the report says `ok`, 1 when a prerequisite is missing, so `dtu-lite check && dtu-lite launch ...` does the right thing. The report is on stdout either way.
+
 ## Adding a command
 
 Each command gets a section here: the invocation shape with its options and defaults, which library function it calls, and what it prints and exits with. Argument meanings belong in the library reference, not here.
