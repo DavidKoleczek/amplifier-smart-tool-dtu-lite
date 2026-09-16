@@ -11,21 +11,26 @@ Prerequisites:
 - [Docker](https://docs.docker.com/get-started/get-docker/), which every universe runs on.
 - [GitHub CLI](https://cli.github.com/) signed in to an account with a [GitHub Copilot subscription](https://github.com/github/copilot-cli#prerequisites) for the model-backed capabilities.
 
-From a clone of this repository:
-
 ```bash
-uv tool install .
+# as a CLI
+uv tool install git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite
+
+# as a library, from another project
+uv add "dtu-lite @ git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite"
+
+# as a skill, for a coding agent
+npx skills add DavidKoleczek/amplifier-smart-tool-dtu-lite
 ```
 
-To use it as a library:
+Verify with `dtu-lite manifest`, which needs no prerequisites and no credentials. To upgrade, run `uv tool upgrade dtu-lite`.
+
+To run it once without installing:
 
 ```bash
-uv add /path/to/dtu-lite
+uvx --from git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite dtu-lite --help
 ```
 
-To upgrade the CLI after pulling changes, run `uv tool install .` again with `--force`.
-
-To teach a coding agent how to drive it, install the [skill](skills/dtu-lite/SKILL.md) at `skills/dtu-lite/` with your agent's skills client.
+The repository is private, so every command above needs git access to it, for example through `gh auth setup-git`.
 
 ## Interface
 

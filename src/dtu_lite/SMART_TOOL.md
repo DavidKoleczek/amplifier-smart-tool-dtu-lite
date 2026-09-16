@@ -66,17 +66,16 @@ signatures. The repository's `docs/01-library.md` and `docs/02-cli.md` carry the
 
 ## Install
 
-From a clone of the repository:
-
 ```bash
 # as a CLI
-uv tool install .
+uv tool install git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite
 
 # as a library, from another project
-uv add /path/to/dtu-lite
+uv add "dtu-lite @ git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite"
 ```
 
-Verify with `dtu-lite manifest`, which needs no credentials.
+Verify with `dtu-lite manifest`, which needs no credentials. To upgrade, run
+`uv tool upgrade dtu-lite`. The repository is private, so both commands need git access to it.
 
 ## Prerequisites
 

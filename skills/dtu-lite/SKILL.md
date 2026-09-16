@@ -1,26 +1,29 @@
 ---
 name: dtu-lite
 description: >-
-  Stands up an isolated, realistic environment from a profile on Docker Compose so software can be tested as though actually deployed. Use when passing tests on your machine is not enough evidence and code must run against real dependencies, published local repositories, and rewritten URLs without touching the host. Drive it from the command line as `dtu-lite`, or from Python through
-  `dtu_lite.lib`. Triggers on "dtu-lite".
+  Stands up an isolated, realistic environment from a profile on Docker Compose so software can be cloned, installed, run, and experienced like a real user would, without touching the host. Use when passing tests on your machine is not enough evidence and code must be exercised as though actually deployed. Drive it from the command line as `dtu-lite`, or from Python through `dtu_lite.lib`. Triggers on "dtu-lite".
 license: MIT
+metadata:
+  author: DavidKoleczek
+  version: "0.1.0"
+  repository: https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite
 ---
 
-# Using dtu-lite
+# dtu-lite
 
-Stands up an isolated, realistic environment from a profile on Docker Compose so software can be tested as though actually deployed. Use when passing tests on your machine is not enough evidence and code must run against real dependencies, published local repositories, and rewritten URLs without touching the host.
+Stands up an isolated, realistic environment from a profile on Docker Compose so software can be cloned, installed, run, and experienced like a real user would, without touching the host. Use when passing tests on your machine is not enough evidence and code must be exercised as though actually deployed.
 
 ## Install
 
-From a clone of the repository:
-
 ```bash
 # as a CLI
-uv tool install .
+uv tool install git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite
 
 # as a library, from another project
-uv add /path/to/dtu-lite
+uv add "dtu-lite @ git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite"
 ```
+
+Verify with `dtu-lite manifest`, which needs no credentials. The repository is private, so both commands need git access to it.
 
 ## Use it
 
