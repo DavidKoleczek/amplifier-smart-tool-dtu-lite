@@ -12,17 +12,14 @@ Prerequisites:
 - [GitHub CLI](https://cli.github.com/) signed in to an account with a [GitHub Copilot subscription](https://github.com/github/copilot-cli#prerequisites) for the model-backed capabilities.
 
 ```bash
-# as a CLI
 uv tool install git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite
-
-# as a library, from another project
-uv add "dtu-lite @ git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite"
-
-# as a skill, for a coding agent
-npx skills add DavidKoleczek/amplifier-smart-tool-dtu-lite
 ```
 
-Verify with `dtu-lite manifest`, which needs no prerequisites and no credentials. To upgrade, run `uv tool upgrade dtu-lite`.
+To use it as a library:
+
+```bash
+uv add "dtu-lite @ git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite"
+```
 
 To run it once without installing:
 
@@ -30,7 +27,27 @@ To run it once without installing:
 uvx --from git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite dtu-lite --help
 ```
 
-The repository is private, so every command above needs git access to it, for example through `gh auth setup-git`.
+To teach a coding agent how to use it, install the [skill](skills/dtu-lite/SKILL.md):
+
+```bash
+npx skills add DavidKoleczek/amplifier-smart-tool-dtu-lite
+```
+
+To update:
+
+```bash
+uv tool upgrade dtu-lite
+npx skills update dtu-lite   # add --global if the skill was installed globally
+```
+
+To uninstall:
+
+```bash
+uv tool uninstall dtu-lite
+npx skills remove dtu-lite   # add --global if the skill was installed globally
+```
+
+Verify an install with `dtu-lite manifest`, which needs no prerequisites and no credentials. The repository is private, so every command above needs git access to it, for example through `gh auth setup-git`.
 
 ## Interface
 

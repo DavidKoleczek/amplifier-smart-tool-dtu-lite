@@ -17,6 +17,7 @@ REFERENCES = {
     "amplifier-smart-tool-digital-twin-universe": "https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe",
     "docker-docs": "https://github.com/docker/docs",
     "mybench-smart-tool": "https://github.com/DavidKoleczek/mybench-smart-tool",
+    "amplifier-smart-tool-creator": "https://github.com/DavidKoleczek/amplifier-smart-tool-creator",
 }
 
 

@@ -72,10 +72,13 @@ uv tool install git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-li
 
 # as a library, from another project
 uv add "dtu-lite @ git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite"
+
+# once, without installing
+uvx --from git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite dtu-lite --help
 ```
 
 Verify with `dtu-lite manifest`, which needs no credentials. To upgrade, run
-`uv tool upgrade dtu-lite`. The repository is private, so both commands need git access to it.
+`uv tool upgrade dtu-lite`. The repository is private, so these commands need git access to it.
 
 ## Prerequisites
 

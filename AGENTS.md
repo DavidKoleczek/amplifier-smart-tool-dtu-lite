@@ -63,3 +63,4 @@ The repositories are (add to the list as more are needed, the one exception to m
 - https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe
 - https://github.com/docker/docs
 - https://github.com/DavidKoleczek/mybench-smart-tool
+- https://github.com/DavidKoleczek/amplifier-smart-tool-creator
