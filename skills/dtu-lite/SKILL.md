@@ -32,4 +32,5 @@ Verify with `dtu-lite manifest`, which needs no credentials. The repository is p
 
 Run `dtu-lite --help`. It prints the tool's skill: when to use it, every capability,
 worked invocations, sharp edges, and which files to read. Follow it. Confirm every argument
-against `dtu-lite <command> --help` rather than memory.
+against `dtu-lite <command> --help` rather than memory, including `install` and its explicit
+consent flags for Docker setup.

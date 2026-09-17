@@ -2,7 +2,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal, NamedTuple
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 DEFAULT_INTELLIGENCE_MODEL = "gpt-6-astra"
 ReasoningEffort = Literal["low", "medium", "high", "xhigh", "max"]
@@ -87,6 +87,55 @@ class HostReport(BaseModel):
     docker_version: str | None
     compose_version: str | None
     prerequisites: list[Prerequisite]
+
+
+# endregion
+
+# region: Install
+
+InstallOutcome = Literal["ready", "planned", "installed", "action-required", "failed"]
+StepStatus = Literal["pending", "done", "skipped", "failed", "manual"]
+InstallMethod = Literal[
+    "docker-desktop-windows-per-user", "docker-desktop-macos", "docker-engine-apt", "docker-engine-dnf"
+]
+
+
+class InstallStep(BaseModel):
+    """One documented host-shell step, including whether it can run without a person."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+    commands: list[str]
+    source: str
+    unattended: bool
+    status: StepStatus
+    reason: str | None
+
+
+class InstallPlan(BaseModel):
+    """The agent's single proposed plan; the tool supplies the verdict and measured Docker state."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    summary: str
+    method: InstallMethod | None
+    steps: list[InstallStep]
+    next: str
+    notes: list[str]
+
+
+class InstallReport(BaseModel):
+    """What was planned or actually ran, and the one thing left for the person to do."""
+
+    outcome: InstallOutcome
+    summary: str
+    method: str | None
+    steps: list[InstallStep]
+    next: str
+    notes: list[str]
+    docs: list[str]
+    docker: HostReport
 
 
 # endregion

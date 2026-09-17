@@ -11,6 +11,8 @@ Prerequisites:
 - [Docker](https://docs.docker.com/get-started/get-docker/), which every universe runs on.
 - [GitHub CLI](https://cli.github.com/) signed in to an account with a [GitHub Copilot subscription](https://github.com/github/copilot-cli#prerequisites) for the model-backed capabilities.
 
+`dtu-lite install` gets Docker working: review the plan, then use `dtu-lite install --yes` to apply it.
+
 ```bash
 uv tool install git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite
 ```
@@ -57,6 +59,9 @@ dtu-lite manifest
 
 # Report whether this host can run a universe: Docker CLI, daemon, and Compose plugin
 dtu-lite check
+
+# Plan Docker setup from official docs (model-backed); add --yes to act
+dtu-lite install
 
 # Launch a universe from a profile name or Compose file and wait until it is ready
 dtu-lite launch --profile <name-or-path>

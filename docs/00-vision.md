@@ -77,7 +77,7 @@ Constraints this sets:
 
 ## Goals
 
-- Docker is the only prerequisite. `check` reports whether it is present and usable. `install` offers to install Docker Desktop or Docker Engine through the platform's package manager (winget, brew, apt/dnf) and only acts with explicit consent. If the system does not allow it, `install` says exactly what to do by hand.
+- Docker is the only prerequisite. `check` reports whether it is present and usable. `install` reads the official docs at run time and plans Docker Desktop's installer on Windows and macOS, or Docker's apt/dnf repositories on Linux. It only acts with explicit consent (`--yes`). If the system does not allow it, `install` says exactly what to do by hand.
 - One interface on every OS. Every command takes the same flags and returns the same JSON on Windows, macOS, and Linux. Platform differences are absorbed inside the tool, never surfaced to the caller.
 - From zero to a running universe in one command after Docker is present: `launch --profile <profile-name>`, resolving under `.agents/digital-twin-universe-lite/`, or `launch --profile path/to/compose.yaml`.
 - The profile is a Compose file. The twin, its dependencies, ports, environment, and healthchecks are ordinary Compose services, so nothing is lost in translation and anyone who knows Compose can write one. What Compose cannot say, which service is the twin, which local repositories to publish, and what the gateway rewrites or allows, lives in an `x-dtu` block that plain `docker compose` ignores. The tool renders an overlay file beside it, with Gitea, the gateway, and the trust plumbing, and runs both together.
@@ -126,7 +126,7 @@ dtu-lite dashboard
 
 - If it needs more than Docker, it does not ship.
 - Render, then run. The tool never drives containers through hidden state; every universe is fully described by files on disk that `docker compose` understands.
-- Host untouched. Rewriting, publishing, proxying, and certificate trust all happen inside the universe.
+- Host untouched by universes. Rewriting, publishing, proxying, and certificate trust all happen inside the universe; only `install --yes` changes the host to set up Docker.
 - The library is the tool. The CLI and any other surface are thin wrappers over it.
 - Deterministic capabilities run with no model provider configured, and never refuse to load without one.
 - The intelligence is behind an interface, so another implementation is a new module rather than a rewrite.

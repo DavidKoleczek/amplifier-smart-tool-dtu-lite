@@ -23,7 +23,7 @@ A profile usually belongs to the project it tests, under `.agents/digital-twin-u
 
 `launch --profile codex-cli` resolves to that directory, searching from the working directory upward to the git root, so it works from any subdirectory of the project. `create-profile` writes here. Nothing else is special about the location: it is where an agent looks first, and where the next agent finds what the last one made.
 
-A name not found in the project is looked for under the examples shipped inside the package, `examples/<name>/` beside the tool's own files. `launch --profile copilot-cli` works on a fresh install for that reason.
+A name not found in the project is looked for under the examples shipped inside the package, `examples/<name>/` beside the tool's own files. `launch --profile copilot-cli` works on a fresh install for that reason, and `launch --profile hello` is the smallest universe there is.
 
 An environment defined anywhere else launches by path. `launch --profile <path>` takes:
 

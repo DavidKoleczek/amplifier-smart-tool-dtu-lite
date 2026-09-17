@@ -10,7 +10,11 @@ from dtu_lite.schemas import HostReport, Platform, Prerequisite
 
 DOCKER_INSTALL_URL = "https://docs.docker.com/get-started/get-docker/"
 COMPOSE_INSTALL_URL = "https://docs.docker.com/compose/install/"
-START_DAEMON_REMEDY = "Start Docker: open Docker Desktop, or on Linux run `sudo systemctl start docker`, then rerun."
+INSTALL_URLS: dict[Platform, str] = {
+    "linux": "https://docs.docker.com/engine/install/",
+    "macos": "https://docs.docker.com/desktop/setup/install/mac-install/",
+    "windows": "https://docs.docker.com/desktop/setup/install/windows-install/",
+}
 
 PLATFORMS: dict[str, Platform] = {"Linux": "linux", "Darwin": "macos", "Windows": "windows"}
 
@@ -40,6 +44,13 @@ def host_platform() -> Platform:
     return PLATFORMS[system]
 
 
+def _install_remedy() -> str:
+    return (
+        f"Run `dtu-lite install` to plan the fix, then `dtu-lite install --yes` to apply unattended steps; "
+        f"or follow {INSTALL_URLS[host_platform()]} (Docker overview: {DOCKER_INSTALL_URL})."
+    )
+
+
 def _probe_cli() -> Prerequisite:
     path = shutil.which("docker")
     if path is None:
@@ -47,7 +58,7 @@ def _probe_cli() -> Prerequisite:
             name="docker-cli",
             present=False,
             detail="`docker` is not on PATH",
-            remedy=f"Install Docker Desktop or Docker Engine from {DOCKER_INSTALL_URL} and open a new shell.",
+            remedy=_install_remedy(),
         )
     return Prerequisite(name="docker-cli", present=True, detail=path)
 
@@ -57,7 +68,7 @@ def _probe_daemon() -> Prerequisite:
         version = DockerClient().version()
     except DockerException as error:
         return Prerequisite(
-            name="docker-daemon", present=False, detail=_first_line(error.stderr), remedy=START_DAEMON_REMEDY
+            name="docker-daemon", present=False, detail=_first_line(error.stderr), remedy=_install_remedy()
         )
     server_version = version.server.version if version.server is not None else None
     if server_version is None:
@@ -65,7 +76,7 @@ def _probe_daemon() -> Prerequisite:
             name="docker-daemon",
             present=False,
             detail="`docker version` reported no server version",
-            remedy=START_DAEMON_REMEDY,
+            remedy=_install_remedy(),
         )
     return Prerequisite(name="docker-daemon", present=True, detail=server_version)
 
@@ -78,7 +89,7 @@ def _probe_compose() -> Prerequisite:
             name="docker-compose",
             present=False,
             detail=_first_line(error.stderr),
-            remedy=f"Install the Compose plugin from {COMPOSE_INSTALL_URL}; Docker Desktop ships it.",
+            remedy=f"{_install_remedy()} Compose plugin instructions: {COMPOSE_INSTALL_URL}.",
         )
     return Prerequisite(
         name="docker-compose", present=True, detail=version.strip().removeprefix("Docker Compose version ")

@@ -54,15 +54,16 @@ wrapper over it, so anything you can do from the shell you can also do from Pyth
 ## Command surfaces
 
 Deterministic commands run with no model provider configured. Today those are `check`,
-`launch`, `list`, `status`, `exec`, `file-push`, `file-pull`, and `destroy`; the capability
-list below is authoritative. Smart commands are
-model-backed and say so in their help text. Serve commands run a local web UI over the same
+`validate-profile`, `launch`, `list`, `status`, `exec`, `file-push`, `file-pull`, and `destroy`; the capability
+list below is authoritative. `install` is model-backed unless Docker is already usable, and says so
+in its help text. Serve commands run a local web UI over the same
 library.
 
 ## Before writing code
 
 Run `dtu-lite check` first. It reports whether Docker is present and usable and exits 1 with a
-`remedy` per missing prerequisite when it is not; nothing else in the tool works until it passes.
+`remedy` per missing prerequisite when it is not. Use `dtu-lite install` to plan the fix;
+universe commands need Docker to be usable.
 Confirm every capability and argument against `dtu-lite <command> --help` before using it.
 Do not fill gaps from memory. The library source beside this file, `lib.py`, carries the
 signatures. The repository's `docs/01-library.md`, `docs/02-cli.md`, and `docs/03-profile.md`
@@ -88,6 +89,8 @@ dtu-lite destroy --id <id>
 `examples/copilot-cli/` under the skill directory is that profile: GitHub Copilot CLI installed
 the way its README says, as a created user, signed in with the host's token. Read it before
 writing a profile of your own; `docs/03-profile.md` in the repository is the schema.
+`examples/hello/` is the smallest universe, an Alpine twin with nothing installed: launch it to
+try `exec` on a machine you have not used the tool on before.
 
 Every universe launched from this machine leaves a directory under `~/.dtu-lite/universes/<id>/`
 until it is destroyed, and its containers keep running. Destroy what you launch.
@@ -111,7 +114,21 @@ Verify with `dtu-lite manifest`, which needs no credentials. To upgrade, run
 ## Prerequisites
 
 Docker is what universes are built on: `dtu-lite check` reports whether it is present and
-usable, and `dtu-lite install` offers to install it through the platform's package manager.
+usable. `dtu-lite install` reads the official docs at run time and plans Docker Desktop's installer
+on Windows and macOS, or Docker's apt/dnf repositories on Linux. It only acts with `--yes`.
+
+```bash
+dtu-lite install             # show and save a sourced plan; exits 1 for planned
+dtu-lite install --yes       # run that plan if the host facts still match
+# To explicitly accept Docker Desktop's terms, use the same choice on both calls:
+dtu-lite install --accept-license
+dtu-lite install --yes --accept-license
+```
+
+The report's `outcome` is `ready`, `planned`, `installed`, `action-required`, or `failed`;
+only `ready` and `installed` exit 0, and `installed` means a universe was launched and ran on the
+new Docker, not just that `check` passes. Follow its single `next` instruction when manual action
+remains. No step prompts on stdin. Partial installation is reported, not rolled back.
 
 Deterministic capabilities need only `uv` and Docker. Model-backed capabilities run through GitHub
 Copilot, signed in as the GitHub CLI's user: `gh` must be installed and `gh auth login`

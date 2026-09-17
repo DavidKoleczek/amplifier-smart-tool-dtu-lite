@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from dtu_lite.capabilities.check import check as check_module
+from dtu_lite.capabilities.install import install as install_module
 from dtu_lite.capabilities.universe import destroy as destroy_module
 from dtu_lite.capabilities.universe import execute as execute_module
 from dtu_lite.capabilities.universe import files as files_module
@@ -11,7 +12,20 @@ from dtu_lite.capabilities.universe import status as status_module
 from dtu_lite.capabilities.universe import validate as validate_module
 from dtu_lite.core import manifest
 from dtu_lite.core import skill as skill_module
-from dtu_lite.schemas import Destroyed, ExecResult, HostReport, Manifest, ProfileReport, Transfer, Universe
+from dtu_lite.intelligence.interface import Intelligence
+from dtu_lite.schemas import (
+    DEFAULT_INTELLIGENCE_MODEL,
+    Destroyed,
+    DtuLiteError,
+    ExecResult,
+    HostReport,
+    InstallReport,
+    Manifest,
+    ProfileReport,
+    ReasoningEffort,
+    Transfer,
+    Universe,
+)
 
 
 def load_manifest() -> Manifest:
@@ -42,6 +56,35 @@ def repository_url() -> str | None:
 def check() -> HostReport:
     """Whether this host can run a universe: the Docker CLI, a reachable daemon, and the Compose plugin."""
     return check_module.check()
+
+
+def install(
+    apply: bool = False,
+    accept_license: bool = False,
+    model: str = DEFAULT_INTELLIGENCE_MODEL,
+    reasoning_effort: ReasoningEffort = "low",
+    timeout_seconds: int = 1200,
+    intelligence: Intelligence | None = None,
+) -> InstallReport:
+    """Get Docker working from official docs. Model-backed unless check passes; only apply=True changes the host."""
+    return install_module.install(
+        check, _verify_universe, apply, accept_license, model, reasoning_effort, timeout_seconds, intelligence
+    )
+
+
+def _verify_universe() -> None:
+    """After an install changed the host: launch the smallest shipped universe, run a command in it, destroy it."""
+    universe = launch_module.launch(install_module.run.VERIFY_PROFILE, timeout_seconds=300)
+    try:
+        result = execute_module.execute(universe.id, "echo dtu-ok")
+    finally:
+        destroy_module.destroy(universe.id)
+    if "dtu-ok" not in result.stdout:
+        raise DtuLiteError(
+            "verify-failed",
+            f"`echo dtu-ok` in the twin exited {result.exit_code}: {result.stderr.strip() or 'no output'}",
+            f"Run `dtu-lite launch --profile {install_module.run.VERIFY_PROFILE}` and `dtu-lite exec` by hand.",
+        )
 
 
 def validate_profile(profile: str | Path) -> ProfileReport:

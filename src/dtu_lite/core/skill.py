@@ -18,6 +18,11 @@ CAPABILITIES = (
         model_backed=False,
     ),
     Capability(
+        "install",
+        "Get Docker working from official docs; show the plan, or run unattended steps with --yes.",
+        model_backed=True,
+    ),
+    Capability(
         "validate-profile",
         "Check a profile without launching it: Compose, `x-dtu`, the universe invariants, and realism warnings.",
         model_backed=False,
@@ -64,6 +69,7 @@ CAPABILITIES = (
 SKILL_RESOURCES = (
     "SMART_TOOL.md",
     "lib.py",
+    "examples/hello/compose.yaml",
     "examples/copilot-cli/compose.yaml",
     "examples/served-repository/compose.yaml",
 )

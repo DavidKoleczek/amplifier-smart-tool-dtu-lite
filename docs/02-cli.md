@@ -31,6 +31,14 @@ dtu-lite check
 
 `lib.check()`, printed as JSON. Exits 0 when the report says `ok`, 1 when a prerequisite is missing, so `dtu-lite check && dtu-lite launch ...` does the right thing. The report is on stdout either way.
 
+## dtu-lite install
+
+```bash
+dtu-lite install [--yes] [--accept-license] [--model ...] [--reasoning-effort low] [--timeout-seconds 1200]
+```
+
+`lib.install()`, with `--yes` as `apply=True`, printed as JSON. One progress line per step goes to stderr while `--yes` runs, so a person watching a long download knows it is alive. Exits 0 on `ready` or `installed` and 1 otherwise, so `dtu-lite install --yes && dtu-lite launch ...` behaves like `check`.
+
 ## dtu-lite validate-profile
 
 ```bash

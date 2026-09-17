@@ -7,7 +7,7 @@ from typing import Annotated
 import typer
 
 from dtu_lite import lib
-from dtu_lite.schemas import DtuLiteError
+from dtu_lite.schemas import DEFAULT_INTELLIGENCE_MODEL, DtuLiteError, ReasoningEffort
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -52,6 +52,36 @@ def check() -> None:
     report = lib.check()
     typer.echo(report.model_dump_json(indent=2))
     if not report.ok:
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def install(
+    yes: Annotated[
+        bool, typer.Option("--yes", help="Run the plan's unattended steps; otherwise only show and save it.")
+    ] = False,
+    accept_license: Annotated[
+        bool,
+        typer.Option("--accept-license", help="Explicitly accept Docker Desktop's Subscription Service Agreement."),
+    ] = False,
+    model: Annotated[
+        str, typer.Option(help="The intelligence model used to plan and repair.")
+    ] = DEFAULT_INTELLIGENCE_MODEL,
+    reasoning_effort: Annotated[ReasoningEffort, typer.Option(help="The model's reasoning effort.")] = "low",
+    timeout_seconds: Annotated[
+        int, typer.Option(min=1, help="Deadline for the whole run, including downloads and startup.")
+    ] = 1200,
+) -> None:
+    """Get Docker working on this host. Model-backed: reads the official Docker docs for this platform and plans
+    the install; runs the unattended steps with --yes. Deterministic when Docker is already present.
+
+    Prints InstallReport JSON on stdout, step progress on stderr. Exits 0 on ready or installed, 1 on planned,
+    action-required or failed. Raises docs-unreachable, plan-rejected, install-timeout, or a gh preflight error
+    with the cause and remedy. Never prompts on stdin.
+    """
+    report = lib.install(yes, accept_license, model, reasoning_effort, timeout_seconds)
+    typer.echo(report.model_dump_json(indent=2))
+    if report.outcome not in ("ready", "installed"):
         raise typer.Exit(code=1)
 
 

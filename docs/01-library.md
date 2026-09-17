@@ -3,16 +3,18 @@
 Every capability of DTU Lite is reachable from `dtu_lite.lib`.
 All other surfaces, including the CLI, are thin wrappers over the library and add no capability of their own.
 
-Each capability has a section with its signature. The other sections, `Failures`, `Profiles`, and `Universe`, define what the capabilities share.
-Data shapes are shown as the classes in `dtu_lite/schemas.py`, since that is what a caller gets back.
+Each capability has a section: what it does, its signature, and what it raises.
+Result shapes are the classes in `dtu_lite/schemas.py`; this page names them and explains only what a field name cannot.
+The sections `Failures`, `Profiles`, and `Universe` define what the capabilities share.
 
 ## Docker access
 
-Everything that touches Docker goes through [python-on-whales](https://github.com/gabrieldemarmiesse/python-on-whales), which drives the `docker` CLI and its Compose plugin from Python with typed results.
+Universe operations and host checks go through [python-on-whales](https://github.com/gabrieldemarmiesse/python-on-whales), which drives the `docker` CLI and its Compose plugin from Python with typed results.
 It is the only maintained Python route to `docker compose`; the official `docker` SDK speaks the Engine API and has no Compose support, and Compose is what a universe is.
 The trade is that the Docker CLI must be on `PATH`, which Docker Desktop and Docker Engine both provide and `check` confirms.
-The one place the library runs the CLI itself is `execute` and `shell`: they take the `docker compose ... exec` command python-on-whales builds and run it through `subprocess`, since that is where a timeout, the exit code, and the caller's terminal are.
+`execute` and `shell` take the `docker compose ... exec` command python-on-whales builds and run it through `subprocess`, since that is where a timeout, the exit code, and the caller's terminal are.
 File transfers use `docker cp` rather than `docker compose cp`, which fails on whole directories.
+`install` is the exception: it runs documented host-shell commands, not Docker.
 
 ## Failures
 
@@ -27,7 +29,7 @@ class DtuLiteError(Exception):
 
 `str(error)` is the message followed by the remedy, which is what the CLI prints. Each capability lists the codes it raises. Anything else that escapes is a bug.
 
-A result that carries a verdict (`HostReport.ok`, `ProfileReport.ok`) is never raised as an error when the verdict is negative. The verdict is the answer.
+A result that carries a verdict (`HostReport.ok`, `ProfileReport.ok`, `InstallReport.outcome`) is never raised as an error when the verdict is negative. The verdict is the answer.
 
 ## Check
 
@@ -38,21 +40,40 @@ Deterministic; needs no model provider.
 def check() -> HostReport
 ```
 
+`HostReport.prerequisites` is in probe order and stops at the first one missing; each missing one carries a `remedy`, which names `dtu-lite install`.
+
+## Install
+
+Get Docker working on this host. Model-backed, except that when `check()` already passes it returns `ready` without loading the intelligence or touching the network.
+
 ```python
-class HostReport:
-    platform: Literal["linux", "macos", "windows"]
-    ok: bool  # every prerequisite present
-    docker_version: str | None  # None until the daemon answers
-    compose_version: str | None  # None until the plugin answers
-    prerequisites: list[Prerequisite]  # in probe order; stops at the first one missing
-
-
-class Prerequisite:
-    name: str  # "docker-cli", "docker-daemon", "docker-compose"
-    present: bool
-    detail: str  # the version or path when present, otherwise what the probe saw
-    remedy: str | None  # set only when not present
+def install(
+    apply: bool = False,            # run the unattended steps; otherwise only plan
+    accept_license: bool = False,   # allow --accept-license in Docker Desktop's installer
+    model: str = DEFAULT_INTELLIGENCE_MODEL,
+    reasoning_effort: ReasoningEffort = "low",
+    timeout_seconds: int = 1200,    # the whole run; Desktop downloads are large and daemon start is polled
+    intelligence: Intelligence | None = None,
+) -> InstallReport
 ```
+
+Host facts are gathered deterministically, the official Docker pages for this platform and distribution are fetched as Markdown at run time, and the agent, given no tools, turns both into one `InstallPlan`: ordered steps, each with its commands, the page it came from, and whether it can run unattended.
+The tool checks the plan before showing it: every step cites a supplied page, `--accept-license` appears only with `accept_license`, and no unattended step uses `sudo` without `-n`, a convenience script, or anything that needs a new login or a restart.
+
+Without `apply`, the plan is the result and is saved at `~/.dtu-lite/install/plan.json` with a hash of the facts. `apply=True` reuses it while the facts still match, so what runs is what was shown and the two calls cost one model call. It then runs the unattended steps in order with stdin closed, stops at the first manual step, and on a failing step resumes the same agent session once for replacement steps.
+When `check()` passes afterwards, it launches the shipped `hello` example, runs a command in it, and destroys it, and only then reports `installed`.
+
+```
+ready            Docker was already usable; nothing was done
+planned          no apply; the steps are the plan
+installed        apply; check() passes and a universe ran
+action-required  apply; the unattended steps ran, a manual one remains
+failed           apply; a step failed after the repair round, or the universe did not run
+```
+
+Every step in `InstallReport.steps` keeps its status and, when it failed, the last lines of its output in `reason`. `next` is exactly one instruction for the person. `notes` carries what the plan wants said: license terms, deviations from the docs such as `-y`, the docker group's privileges.
+
+Raises `docs-unreachable` (with the pages to read by hand), `plan-rejected`, `install-timeout` (with the report so far), and the intelligence preflight codes `gh-missing` and `gh-not-signed-in`.
 
 ## Profiles
 
@@ -73,6 +94,7 @@ When nothing is found, the capability raises `profile-not-found`, saying what it
 
 ```
 examples/
+  hello/                The smallest universe: an Alpine twin with nothing installed
   copilot-cli/          GitHub Copilot CLI installed as a user would, signed in with the host's GH_TOKEN
   served-repository/    A local git repository cloned in the twin from the URL it stands in for
 ```
@@ -95,23 +117,7 @@ Checks run in this order and every problem is reported, not only the first:
 3. `x-dtu` against its schema.
 4. The universe invariants (errors) and realism checks (warnings) listed in the profile reference.
 
-```python
-class ProfileReport:
-    path: Path  # the Compose file or Dockerfile that was resolved
-    name: str  # the Compose project name base
-    twin_machine: str  # the service that will be the twin, empty when the profile names none
-    services: list[str]
-    ok: bool  # no errors; warnings do not affect it
-    errors: list[Finding]
-    warnings: list[Finding]
-
-
-class Finding:
-    code: str  # stable slug, such as "twin-missing" or "bind-mount"
-    location: str | None  # where in the file, such as "services.copilot.volumes[0]"; None for the whole file
-    message: str
-    remedy: str
-```
+`ProfileReport.ok` is "no errors"; warnings do not affect it. Each `Finding` carries a stable `code`, a `location` in the file such as `services.copilot.volumes[0]`, the message, and a remedy.
 
 Raises `profile-not-found` and `docker-unavailable`.
 
@@ -124,35 +130,7 @@ What the tool renders for a universe lives in its state directory, `~/.dtu-lite/
 A profile that serves nothing and rewrites nothing renders no overlay at all, so `dtu.yaml` is absent and the universe is exactly the profile.
 The record is how an id leads back to a universe: every capability that takes an `id` reads it first and raises `universe-not-found` when it is missing. A stack whose directory was deleted by hand is no longer a universe to the tool; `docker compose -p <id> down --volumes` clears it.
 
-Every capability that acts on a universe returns this:
-
-```python
-class Universe:
-    id: str
-    name: str
-    description: str | None
-    profile_path: Path
-    twin_machine: str
-    state: Literal["starting", "running", "degraded", "stopped"]
-    services: list[Service]
-    urls: list[Url]  # the twin's published ports, named by x-dtu.urls (not yet honored: every port is `/`, unlabeled)
-    state_path: Path
-    created_at: datetime
-
-
-class Service:
-    name: str
-    state: str  # Compose's word: "running", "exited", "created", ...
-    health: Literal["starting", "healthy", "unhealthy"] | None  # None when it has no healthcheck
-    image: str
-
-
-class Url:
-    url: str  # "http://localhost:8410/chat/"
-    port: int
-    path: str
-    label: str | None
-```
+Every capability that acts on a universe returns a `Universe`: the record above, plus `state`, its `services` as Compose reports them (state, health, image), and `urls`, the twin's published ports as `http://localhost:<port>/` (naming them through `x-dtu.urls` is not yet honored).
 
 `state` is `running` when every service is up and healthy, `starting` while any is still becoming healthy, `degraded` when any has exited or is unhealthy, and `stopped` when none is running.
 
@@ -203,7 +181,7 @@ Raises `universe-not-found` and `docker-unavailable`.
 
 ## Execute
 
-Run one command in the twin and get its result.
+Run one command in the twin and get its `ExecResult`: exit code, stdout, stderr.
 
 ```python
 def execute(
@@ -213,13 +191,6 @@ def execute(
     workdir: str | None = None,     # default: the twin's own working directory
     timeout_seconds: int = 300,
 ) -> ExecResult
-```
-
-```python
-class ExecResult:
-    exit_code: int
-    stdout: str
-    stderr: str
 ```
 
 The command runs through a login shell (`sh -lc`), so `PATH` changes an installer made in `~/.profile` apply, the way they would in a person's terminal.
@@ -241,18 +212,11 @@ Raises `universe-not-found`, `twin-not-running`, `docker-unavailable`, and `no-t
 
 ## Push and pull files
 
-Copy between the host and the twin.
+Copy between the host and the twin. `Transfer` says where the copy landed and how many files moved.
 
 ```python
 def push_files(id: str, source: Path, destination: str) -> Transfer
 def pull_files(id: str, source: str, destination: Path) -> Transfer
-```
-
-```python
-class Transfer:
-    source: str
-    destination: str  # where the copy landed, after the rules below
-    files: int  # how many files were copied; a file counts one
 ```
 
 Same rules as `docker cp`: when the destination is an existing directory the source is placed inside it under its own name, otherwise the source lands at the destination path itself, and the destination's parent must exist. A path in the twin is resolved against `/`, as `docker cp` does, not the twin's working directory.
@@ -262,16 +226,10 @@ Raises `universe-not-found`, `twin-not-running`, `source-not-found` (the host pa
 
 ## Destroy
 
-Remove a universe: every container, network, and volume, and its state directory. Built images stay, so the next `launch` of the same profile is fast.
+Remove a universe: every container, network, and volume, and its state directory. Built images stay, so the next `launch` of the same profile is fast. `Destroyed.removed` names what was taken down.
 
 ```python
 def destroy(id: str) -> Destroyed
-```
-
-```python
-class Destroyed:
-    id: str
-    removed: list[str]  # names of the containers, networks, and volumes taken down
 ```
 
 Raises `universe-not-found` and `docker-unavailable`.
@@ -295,44 +253,16 @@ Setting `AgentRequest.resume` to an earlier `AgentResult.session_id` continues t
 `default_intelligence()` returns the shipped implementation, `CopilotIntelligence`, built on the [GitHub Copilot SDK](https://github.com/github/copilot-sdk) and signed in through the GitHub CLI.
 Another implementation is a module satisfying the protocol and a branch in that factory.
 
-## Manifest
+## Manifest and skill
 
-The tool's `SMART_TOOL.md` as structured data: the frontmatter as fields, the Markdown below it as `Manifest.body`.
+`load_manifest()` returns the tool's `SMART_TOOL.md` as structured data: the frontmatter as fields, the Markdown below it as `Manifest.body`.
 
-```python
-def load_manifest() -> Manifest
-```
-
-## Skill
-
-What an agent reads once it has decided to drive the tool: the manifest body and the capability list, wrapped so the reader knows where the tool's files are.
-The CLI's `--help` prints exactly this.
-
-```python
-def skill() -> str
-```
-
-The installed package root, resolved at runtime, where the files the skill names can be read.
-
-```python
-def skill_directory() -> Path
-```
-
-The files the skill lists under `<skill_resources>`, as paths relative to `skill_directory()`. Every one ships inside the package, so each resolves after installation.
-
-```python
-def skill_resources() -> list[str]
-```
-
-The tool's canonical source, read from the package metadata's `[project.urls]` `Repository` entry, or `None` when the package declares none.
-The skill carries it so a caller that can run the tool but not read its files still reaches the documentation.
-
-```python
-def repository_url() -> str | None
-```
+`skill()` is what an agent reads once it has decided to drive the tool: the manifest body and the capability list, wrapped so the reader knows where the tool's files are. The CLI's `--help` prints exactly this.
+`skill_directory()` is the installed package root, where the files the skill names can be read; `skill_resources()` lists those files relative to it, and every one ships inside the package.
+`repository_url()` is the tool's canonical source from the package metadata's `[project.urls]` `Repository` entry, or `None`; the skill carries it so a caller that can run the tool but not read its files still reaches the documentation.
 
 ## Adding a capability
 
 A capability's code goes in `dtu_lite/capabilities/<name>/`, with its prompts and templates beside it, and `lib.py` gets a facade function that imports it and is the only caller of it.
-Each capability of the library gets a section here: what it does and when to reach for it, the signature `lib.py` exposes, what each argument means, and what it returns or raises, with the result shape shown as its class.
+Each capability of the library gets a section here: what it does and when to reach for it, the signature `lib.py` exposes, what each argument means, and what it returns or raises. Name the result class; describe a field only when its name does not say enough.
 Model-backed capabilities say so, and take `model` and `reasoning_effort`, defaulting to `DEFAULT_INTELLIGENCE_MODEL` and `low` from `dtu_lite.schemas`.
