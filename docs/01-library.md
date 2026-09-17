@@ -82,10 +82,10 @@ Every `profile` argument in this library accepts the same three forms:
 
 - A name, such as `copilot-cli`: the directory `.agents/digital-twin-universe-lite/copilot-cli/`, searched for from the working directory upward to the git root.
 - A path to a Compose file.
-- A path to a directory, which must hold `compose.yaml` or `docker-compose.yaml`, or, failing both, a `Dockerfile` (not yet implemented).
+- A path to a directory, which must hold `compose.yaml` or `docker-compose.yaml`.
 
 When a name is not found in the project, it is looked for under the examples shipped inside the package, so `copilot-cli` launches on a fresh install with nothing copied. The name form never accepts a path separator.
-Whatever the form, the result is the entry point: a Compose file, or a lone `Dockerfile`, which is treated as a one-service profile with that service as the twin.
+Whatever the form, the result is the entry point: a Compose file.
 When nothing is found, the capability raises `profile-not-found`, saying what it looked for and where.
 
 ## Examples
@@ -97,6 +97,7 @@ examples/
   hello/                The smallest universe: an Alpine twin with nothing installed
   copilot-cli/          GitHub Copilot CLI installed as a user would, signed in with the host's GH_TOKEN
   served-repository/    A local git repository cloned in the twin from the URL it stands in for
+  web-site/             A static site opened from the host's browser at the URLs `x-dtu.urls` names
 ```
 
 The examples root is `skill_directory() / "examples"`.
@@ -130,7 +131,7 @@ What the tool renders for a universe lives in its state directory, `~/.dtu-lite/
 A profile that serves nothing and rewrites nothing renders no overlay at all, so `dtu.yaml` is absent and the universe is exactly the profile.
 The record is how an id leads back to a universe: every capability that takes an `id` reads it first and raises `universe-not-found` when it is missing. A stack whose directory was deleted by hand is no longer a universe to the tool; `docker compose -p <id> down --volumes` clears it.
 
-Every capability that acts on a universe returns a `Universe`: the record above, plus `state`, its `services` as Compose reports them (state, health, image), and `urls`, the twin's published ports as `http://localhost:<port>/` (naming them through `x-dtu.urls` is not yet honored).
+Every capability that acts on a universe returns a `Universe`: the record above, plus `state`, its `services` as Compose reports them (state, health, image), and `urls`, the twin's published ports as the host reaches them: `http://localhost:<host port>/` for each, or the host, path, and label `x-dtu.urls` gives that container port. The entries are kept in the record, so `status` and `list` report them without rereading the profile. A `host` other than `localhost` is reported as written; whether it resolves is the client's business, and the profile reference says which clients honor `*.localhost`.
 
 `state` is `running` when every service is up and healthy, `starting` while any is still becoming healthy, `degraded` when any has exited or is unhealthy, and `stopped` when none is running.
 
@@ -227,6 +228,8 @@ Raises `universe-not-found`, `twin-not-running`, `source-not-found` (the host pa
 ## Destroy
 
 Remove a universe: every container, network, and volume, and its state directory. Built images stay, so the next `launch` of the same profile is fast. `Destroyed.removed` names what was taken down.
+
+Containers get one second after SIGTERM, not Compose's ten: the volumes go with them, so a graceful stop has nothing to preserve, and a process running as PID 1 (`sleep infinity`, `python -m http.server`) ignores the signal and would sit out the full grace period.
 
 ```python
 def destroy(id: str) -> Destroyed

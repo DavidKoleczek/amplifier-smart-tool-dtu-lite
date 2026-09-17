@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from python_on_whales.exceptions import DockerException
 
 from dtu_lite.capabilities.universe.compose import compose_client, translate_docker_error
-from dtu_lite.schemas import DtuLiteError
+from dtu_lite.schemas import DtuLiteError, UrlSpec
 
 PROFILE_DIRECTORY = Path(".agents") / "digital-twin-universe-lite"
 EXAMPLES_DIRECTORY = Path(__file__).parents[2] / "examples"
@@ -36,16 +36,6 @@ class Rewrite(BaseModel):
 
     match: str
     target: str
-
-
-class UrlSpec(BaseModel):
-    """A name and path for one of the twin's published ports."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    port: int
-    path: str = "/"
-    label: str | None = None
 
 
 class XDtu(BaseModel):

@@ -17,7 +17,7 @@ from dtu_lite import lib
 from dtu_lite.capabilities.universe.compose import compose_client
 from dtu_lite.schemas import DtuLiteError, Universe
 
-pytestmark = pytest.mark.needs_docker
+pytestmark = [pytest.mark.needs_docker, pytest.mark.live]
 
 SERVED_URL = "https://github.com/fake-org/probe"
 MOCKED_HOST = "api.example.com"

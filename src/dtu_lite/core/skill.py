@@ -72,6 +72,7 @@ SKILL_RESOURCES = (
     "examples/hello/compose.yaml",
     "examples/copilot-cli/compose.yaml",
     "examples/served-repository/compose.yaml",
+    "examples/web-site/compose.yaml",
 )
 
 

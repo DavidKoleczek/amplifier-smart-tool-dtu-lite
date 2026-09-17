@@ -78,6 +78,22 @@ Run tests:
 uv run pytest
 ```
 
+The full suite launches real universes and takes about a minute on up to eight xdist workers. While iterating, run what is relevant:
+
+```bash
+# Everything that does not launch a universe, a few seconds. Needs Docker for `docker compose config`.
+uv run pytest -m "not live"
+
+# One live file, or one test in it
+uv run pytest tests/test_live_universe.py
+uv run pytest tests/test_live_overlay.py -k served_repository
+
+# In-process, for a debugger or -s
+uv run pytest -n0 tests/test_live_universe.py -k round_trip -s
+```
+
+Each worker hands out host ports from its own range (`free_port` in `tests/conftest.py`), so parallel launches never collide on a port.
+
 #### References
 
 `reference/` holds gitignored clones of the repositories worth reading while developing this tool. `uv run setup-for-dev.py` clones any that are missing.

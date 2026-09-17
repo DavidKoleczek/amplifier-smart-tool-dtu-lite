@@ -181,11 +181,22 @@ class Service(BaseModel):
     image: str
 
 
+class UrlSpec(BaseModel):
+    """An `x-dtu.urls` entry: a path and label for a port the twin listens on."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    port: int = Field(description="The container port; the host port it is published on is read at launch")
+    path: str = Field(default="/", pattern=r"^/")
+    host: str = Field(default="localhost", description="The name the URL is reported with; it must reach loopback")
+    label: str | None = None
+
+
 class Url(BaseModel):
     """One of the twin's published ports, as the host reaches it."""
 
     url: str
-    port: int
+    port: int = Field(description="The host port")
     path: str
     label: str | None
 

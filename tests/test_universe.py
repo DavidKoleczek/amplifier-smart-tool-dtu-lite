@@ -10,10 +10,10 @@ from typer.testing import CliRunner
 from dtu_lite import lib
 from dtu_lite.capabilities.universe import launch as launch_module
 from dtu_lite.capabilities.universe import state
-from dtu_lite.capabilities.universe.compose import universe_state
+from dtu_lite.capabilities.universe.compose import universe_state, urls
 from dtu_lite.capabilities.universe.state import UniverseRecord
 from dtu_lite.cli import app, main
-from dtu_lite.schemas import Destroyed, DtuLiteError, ExecResult, Health, Service, Transfer, Universe
+from dtu_lite.schemas import Destroyed, DtuLiteError, ExecResult, Health, Service, Transfer, Universe, Url, UrlSpec
 
 runner = CliRunner()
 
@@ -108,6 +108,38 @@ def test_error_string_is_message_then_remedy() -> None:
 )
 def test_universe_state_from_its_services(services: list[Service], expected: str) -> None:
     assert universe_state(services) == expected
+
+
+def test_urls_follow_the_profile_where_it_describes_a_port_and_default_elsewhere() -> None:
+    both_families = [{"HostIp": "0.0.0.0", "HostPort": "8410"}, {"HostIp": "::", "HostPort": "8410"}]
+    ports = {
+        "8000/tcp": both_families,
+        "9000/tcp": [{"HostIp": "0.0.0.0", "HostPort": "32768"}],
+        "53/udp": [{"HostIp": "0.0.0.0", "HostPort": "53"}],
+        "7000/tcp": None,
+    }
+    specs = [
+        UrlSpec(port=8000, path="/api/health", label="Health"),
+        UrlSpec(port=8000, host="app.localhost", label="Home"),
+        UrlSpec(port=7000, path="/unbound"),
+    ]
+
+    assert urls(ports, specs) == [
+        Url(url="http://localhost:8410/api/health", port=8410, path="/api/health", label="Health"),
+        Url(url="http://app.localhost:8410/", port=8410, path="/", label="Home"),
+        Url(url="http://localhost:32768/", port=32768, path="/", label=None),
+    ]
+    assert urls({}, specs) == []
+
+
+def test_a_record_written_before_urls_existed_still_reads(state_root: Path) -> None:
+    record = _record()
+    (state_root / record.id).mkdir()
+    written = json.loads(record.model_dump_json())
+    del written["urls"]
+    (state_root / record.id / state.RECORD_FILE).write_text(json.dumps(written))
+
+    assert state.read(record.id).urls == []
 
 
 @pytest.mark.parametrize(

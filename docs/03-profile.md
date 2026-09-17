@@ -29,7 +29,6 @@ An environment defined anywhere else launches by path. `launch --profile <path>`
 
 - A Compose file.
 - A directory holding `compose.yaml` or `docker-compose.yaml`.
-- A directory holding only a `Dockerfile`, which launches as a single-service universe with that service as the twin (not yet implemented).
 
 A Compose file without `x-dtu` is a valid profile when it has one service. Add `x-dtu` when it has several, or to serve repositories, rewrite hosts, or restrict egress.
 
@@ -97,14 +96,34 @@ A profile has one service the software under test is installed and run in, and a
 
 ### `urls`
 
-Optional, and not yet honored. Names and paths for the URLs `launch` reports, by host port. Without it, every published port is reported as `http://localhost:<port>/`.
+Optional. Paths and labels for the URLs `launch`, `status`, and `list` report, by the container port the twin listens on. The host side is whatever `ports` published it to, read from Docker at launch, so `${PORT:-8410}:8000` and a bare `8000` both work. Without an entry, a published port is reported as `http://localhost:<host port>/`; with several entries on one port, each becomes a URL, in the order written.
 
 ```yaml
 urls:
-  - port: 8410
+  - port: 8000
     path: /chat/
     label: Chat UI
+    host: chat.localhost
 ```
+
+`path` starts with `/`. A `port` the twin does not publish over TCP is the error `url-port-unpublished`.
+
+`host` is the name the URL is reported with, `localhost` by default. It changes nothing about the universe: the port is still published on the host's loopback, and the name has to get the client there on its own. The tool cannot make a name resolve without editing the hosts file, which it never does, so a name is a promise about the client, and the safe one is under `.localhost`, which RFC 6761 reserves for loopback:
+
+```
+Chrome, Edge, Firefox          every OS         resolve *.localhost to 127.0.0.1 themselves
+curl 7.78 and later            every OS         same
+Linux with systemd-resolved    system-wide      Python, Node, wget, everything
+Safari                         macOS            does not; needs a hosts entry
+Python, Node, wget, ping       macOS, Windows   use the system resolver, which does not; needs a hosts entry
+WSL                            Windows          no systemd-resolved by default; same as macOS for non-browsers
+```
+
+So `http://chat.localhost:8410/` opens in a browser on any machine, and a script on a Mac hitting the same URL fails with an unknown host until `127.0.0.1 chat.localhost` is in `/etc/hosts`. Give a script the `localhost` URL, or an entry with no `host`, when that matters.
+
+Any other name (`chat.test`, `app.example.com`) is looked up from the machine running `validate-profile`: when it does not resolve to a loopback address there, the warning `url-host-unresolved` names the hosts entry that would fix it. `*.localhost` is exempt from the lookup, since the system resolver is exactly the client that may not honor it. Public wildcard DNS such as `127.0.0.1.nip.io` passes the lookup and works in every client, at the cost of depending on the internet and a third party.
+
+The twin is not told its name. Requests arrive with the `Host` header the client sent, so an app that routes or sets cookies by hostname behaves as it would with a real one, but an app that builds absolute URLs learns its hostname from its own configuration, which the profile sets in `environment` as a deployment would.
 
 ### `repositories`
 
@@ -202,11 +221,12 @@ Both lines are Debian and Alpine shaped. An image whose certificates live elsewh
 - `x-dtu.twin_machine` names a service that is not in the file, or is missing when there are several services and none is named `twin`.
 - A service is named `git` or `gateway`.
 - A `repositories[].path` is not a git repository, or `url` has no host and path.
+- A `urls[].port` the twin does not publish over TCP.
 - A service sets `network_mode`, `networks`, `dns`, or `extra_hosts` while the gateway would be present, since each bypasses it.
 - The twin is gated behind a Compose `profiles:` entry that would leave it out.
 - Windows and Linux services in one file.
 
-The codes are `twin-missing`, `reserved-service-name`, `repository-not-git`, `repository-url-invalid`, `routes-around-gateway`, `twin-excluded-by-compose-profile`, `mixed-platforms`, and `x-dtu-invalid`, plus `env-missing` and `profile-invalid` from Compose itself.
+The codes are `twin-missing`, `reserved-service-name`, `repository-not-git`, `repository-url-invalid`, `url-port-unpublished`, `routes-around-gateway`, `twin-excluded-by-compose-profile`, `mixed-platforms`, and `x-dtu-invalid`, plus `env-missing` and `profile-invalid` from Compose itself.
 
 Warnings, since each is legitimate sometimes but usually not what a realistic profile means:
 
@@ -214,8 +234,9 @@ Warnings, since each is legitimate sometimes but usually not what a realistic pr
 - The twin bind-mounts a host path, which mutates the host and stands in for the clone and install a real user would do.
 - The twin has no `healthcheck`, so `launch` cannot wait for it to be ready.
 - The twin runs as `root`.
+- A `urls[].host` outside `.localhost` that this machine does not resolve to loopback.
 
-Their codes are `no-long-running-command`, `bind-mount`, `no-healthcheck`, and `runs-as-root`.
+Their codes are `no-long-running-command`, `bind-mount`, `no-healthcheck`, `runs-as-root`, and `url-host-unresolved`.
 
 ## A change to someone else's repository
 

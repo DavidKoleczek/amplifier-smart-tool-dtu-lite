@@ -1,13 +1,14 @@
 """Compose access shared by every universe capability: the client, error translation, and measuring a project."""
 
 from pathlib import Path
+from typing import Any
 
 from python_on_whales import ClientNotFoundError, DockerClient
 from python_on_whales.components.container.cli_wrapper import Container
 from python_on_whales.exceptions import DockerException
 
 from dtu_lite.capabilities.universe.state import UniverseRecord
-from dtu_lite.schemas import DtuLiteError, Health, Service, Universe, UniverseState, Url
+from dtu_lite.schemas import DtuLiteError, Health, Service, Universe, UniverseState, Url, UrlSpec
 
 SERVICE_LABEL = "com.docker.compose.service"
 PROJECT_LABEL = "com.docker.compose.project"
@@ -88,7 +89,7 @@ def measure(record: UniverseRecord, containers: list[Container] | None = None) -
         twin_machine=record.twin_machine,
         state=universe_state(services),
         services=services,
-        urls=_urls(twin) if twin is not None else [],
+        urls=urls(twin.network_settings.ports or {}, record.urls) if twin is not None else [],
         state_path=record.state_path,
         created_at=record.created_at,
     )
@@ -127,12 +128,23 @@ def service_name(container: Container) -> str:
     return (container.config.labels or {}).get(SERVICE_LABEL, container.name)
 
 
-def _urls(twin: Container) -> list[Url]:
-    """The twin's published ports as the host reaches them, one URL per host port, in port order."""
-    ports: set[int] = set()
-    for bindings in (twin.network_settings.ports or {}).values():
+def urls(ports: dict[str, Any], specs: list[UrlSpec]) -> list[Url]:
+    """The twin's published ports as the host reaches them, in host port order.
+
+    `ports` is Docker's `NetworkSettings.Ports`: `"80/tcp"` to its host bindings, one per address family. A port
+    the profile describes in `x-dtu.urls` gets one URL per entry, in the profile's order; any other gets `/`.
+    """
+    published: dict[int, int] = {}
+    for exposed, bindings in ports.items():
+        container_port, _, protocol = exposed.partition("/")
         for binding in bindings or []:
-            host_port = binding.get("HostPort")
-            if host_port:
-                ports.add(int(host_port))
-    return [Url(url=f"http://localhost:{port}/", port=port, path="/", label=None) for port in sorted(ports)]
+            if protocol == "tcp" and binding.get("HostPort"):
+                published[int(container_port)] = int(binding["HostPort"])
+    result: list[Url] = []
+    for container_port, host_port in sorted(published.items(), key=lambda item: item[1]):
+        described = [spec for spec in specs if spec.port == container_port] or [UrlSpec(port=container_port)]
+        result += [
+            Url(url=f"http://{spec.host}:{host_port}{spec.path}", port=host_port, path=spec.path, label=spec.label)
+            for spec in described
+        ]
+    return result

@@ -1,6 +1,8 @@
 """Fixtures shared by the test suite: Docker availability, host ports, state isolation, and git repositories."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import suppress
+import itertools
 from pathlib import Path
 import shutil
 import socket
@@ -31,15 +33,31 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
 
 
 @pytest.fixture
-def free_port() -> int:
-    """A host port nothing holds right now.
+def free_port(worker_id: str) -> int:
+    """A host port nothing holds right now, and that no other test worker will be handed.
 
-    Binding to port 0 and closing leaves a window in which something else could take it, but that window is far
-    smaller than the collision rate of hand-picked literals, and losing it surfaces as the named `port-in-use`.
+    Each xdist worker draws from its own range and never repeats a port, so two workers launching at once cannot
+    collide; binding first skips anything the machine already holds. Without xdist the kernel picks, as before.
     """
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        return int(sock.getsockname()[1])
+    if worker_id == "master":
+        with socket.socket() as sock:
+            sock.bind(("127.0.0.1", 0))
+            return int(sock.getsockname()[1])
+    for port in _worker_ports.setdefault(worker_id, itertools.count(_worker_port_base(worker_id))):
+        with socket.socket() as sock, suppress(OSError):
+            sock.bind(("127.0.0.1", port))
+            return port
+    raise AssertionError("unreachable: itertools.count never ends")
+
+
+def _worker_port_base(worker_id: str) -> int:
+    """`gw3` draws from 21500 upward: a range per worker, well clear of the ephemeral ports Docker itself uses."""
+    return WORKER_PORT_BASE + int(worker_id.removeprefix("gw")) * WORKER_PORT_SPAN
+
+
+_worker_ports: dict[str, Iterator[int]] = {}
+WORKER_PORT_BASE = 20000
+WORKER_PORT_SPAN = 500
 
 
 @pytest.fixture

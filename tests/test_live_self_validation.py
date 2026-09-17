@@ -13,7 +13,7 @@ import pytest
 from dtu_lite import lib
 from dtu_lite.capabilities.universe.profile import PROFILE_DIRECTORY
 
-pytestmark = pytest.mark.needs_docker
+pytestmark = [pytest.mark.needs_docker, pytest.mark.live]
 
 REPOSITORY = Path(__file__).parents[1]
 PROFILE = REPOSITORY / PROFILE_DIRECTORY / "self-validation"

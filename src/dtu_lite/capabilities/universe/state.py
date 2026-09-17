@@ -5,9 +5,9 @@ from pathlib import Path
 import secrets
 import shutil
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from dtu_lite.schemas import DtuLiteError
+from dtu_lite.schemas import DtuLiteError, UrlSpec
 
 STATE_ROOT = Path.home() / ".dtu-lite" / "universes"
 RECORD_FILE = "universe.json"
@@ -23,6 +23,7 @@ class UniverseRecord(BaseModel):
     profile_path: Path
     twin_machine: str
     created_at: datetime
+    urls: list[UrlSpec] = Field(default_factory=list)
 
     @property
     def state_path(self) -> Path:

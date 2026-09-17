@@ -76,6 +76,34 @@ INVALID_PROFILES: dict[str, tuple[str, str]] = {
             profiles: [manual]
         """,
     ),
+    "a url on a port the twin does not publish": (
+        "url-port-unpublished",
+        """\
+        name: unpublished-url
+        x-dtu:
+          twin_machine: box
+          urls:
+            - {port: 8000, path: /chat/}
+        services:
+          box:
+            image: alpine:3.20
+            ports: ["8410:80", "53:8000/udp"]
+        """,
+    ),
+    "a url path that does not start at the root": (
+        "x-dtu-invalid",
+        """\
+        name: relative-url
+        x-dtu:
+          twin_machine: box
+          urls:
+            - {port: 80, path: chat/}
+        services:
+          box:
+            image: alpine:3.20
+            ports: ["8410:80"]
+        """,
+    ),
     "windows and linux services together": (
         "mixed-platforms",
         """\
@@ -165,6 +193,31 @@ def test_a_sound_profile_reports_what_it_resolved_to(tmp_path: Path) -> None:
     assert report.name == "valid"
     assert report.twin_machine == "box"
     assert report.services == ["box"]
+
+
+def _with_url(host: str) -> str:
+    urls = f"  twin_machine: box\n  urls:\n    - {{port: 80, path: /chat/, host: {host}}}\n"
+    body = VALID.replace("  twin_machine: box\n", urls)
+    return body.replace("    user: app\n", '    user: app\n    ports: ["8410:80"]\n')
+
+
+@pytest.mark.parametrize("host", ["localhost", "Site.LocalHost", "127.0.0.1"])
+def test_a_url_on_a_published_port_at_a_loopback_name_is_sound_without_warning(tmp_path: Path, host: str) -> None:
+    report = lib.validate_profile(_profile(tmp_path, _with_url(host)))
+
+    assert report.ok is True
+    assert report.errors == []
+    assert report.warnings == []
+
+
+def test_a_url_host_this_machine_cannot_resolve_is_a_warning(tmp_path: Path) -> None:
+    # `.invalid` never resolves, by RFC 6761.
+    report = lib.validate_profile(_profile(tmp_path, _with_url("site.invalid")))
+
+    assert report.ok is True
+    assert _codes(report.warnings) == ["url-host-unresolved"]
+    assert report.warnings[0].location == "x-dtu.urls[0].host"
+    assert "127.0.0.1 site.invalid" in report.warnings[0].remedy
 
 
 @pytest.mark.parametrize("case", list(INVALID_PROFILES))

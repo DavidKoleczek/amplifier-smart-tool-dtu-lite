@@ -4,7 +4,9 @@ Errors say the profile is not a universe. Warnings say it is less realistic than
 sometimes exactly what its author wanted, so they never decide the verdict.
 """
 
+import ipaddress
 from pathlib import Path
+import socket
 from typing import Any, NamedTuple
 from urllib.parse import urlparse
 
@@ -18,6 +20,7 @@ from dtu_lite.schemas import DtuLiteError, Finding, ProfileReport
 DEFAULT_NETWORK = "default"
 ROOT_USERS = ("root", "0", "root:root", "0:0")
 BYPASSES = ("network_mode", "dns", "extra_hosts")
+LOCALHOST = "localhost"
 
 
 class Validation(NamedTuple):
@@ -66,9 +69,12 @@ def _validated(path: Path, config: dict[str, Any]) -> Validation:
     errors += _reserved(services)
     errors += _platforms(services)
     errors += _repositories(path, x_dtu)
+    if twin in services:
+        errors += _urls(twin, services[twin], x_dtu)
     if x_dtu.needs_gateway:
         errors += _isolation(services)
     warnings = _realism(twin, services[twin]) if twin in services else []
+    warnings += _url_hosts(x_dtu)
     report = ProfileReport(
         path=path,
         name=config.get("name") or path.parent.name,
@@ -195,6 +201,55 @@ def _repositories(path: Path, x_dtu: XDtu) -> list[Finding]:
                 )
             )
     return findings
+
+
+def _urls(twin: str, service: dict[str, Any], x_dtu: XDtu) -> list[Finding]:
+    """A URL the profile promises must sit on a port the twin publishes, or the host could never open it."""
+    published = sorted({int(port["target"]) for port in service.get("ports") or [] if port.get("protocol") == "tcp"})
+    return [
+        Finding(
+            code="url-port-unpublished",
+            location=f"{X_DTU}.urls[{index}].port",
+            message=f"The twin {twin!r} publishes no TCP port {spec.port}; its published ports are {published}.",
+            remedy=f"Set `port` to the container port the twin listens on and add it to `services.{twin}.ports`.",
+        )
+        for index, spec in enumerate(x_dtu.urls)
+        if spec.port not in published
+    ]
+
+
+def _url_hosts(x_dtu: XDtu) -> list[Finding]:
+    """A URL host other than loopback is a promise the tool cannot keep; it can only say whether this machine keeps it.
+
+    `*.localhost` is exempt: browsers and curl resolve it to loopback themselves, so a failed system lookup here
+    would warn about the case that works.
+    """
+    findings: list[Finding] = []
+    for index, spec in enumerate(x_dtu.urls):
+        if _is_localhost(spec.host) or _resolves_to_loopback(spec.host):
+            continue
+        findings.append(
+            Finding(
+                code="url-host-unresolved",
+                location=f"{X_DTU}.urls[{index}].host",
+                message=f"{spec.host!r} does not resolve to this machine, so the URL reported for it will not open here.",
+                remedy=f"Use a `*.localhost` name, or add `127.0.0.1 {spec.host}` to the hosts file on each machine.",
+            )
+        )
+    return findings
+
+
+def _is_localhost(host: str) -> bool:
+    lowered = host.lower()
+    return lowered == LOCALHOST or lowered.endswith(f".{LOCALHOST}")
+
+
+def _resolves_to_loopback(host: str) -> bool:
+    try:
+        addresses = {info[4][0] for info in socket.getaddrinfo(host, None)}
+    except OSError:
+        return False
+    return bool(addresses) and all(ipaddress.ip_address(str(address)).is_loopback for address in addresses)
 
 
 def _servable(url: str) -> bool:

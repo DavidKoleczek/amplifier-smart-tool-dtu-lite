@@ -90,7 +90,9 @@ dtu-lite destroy --id <id>
 the way its README says, as a created user, signed in with the host's token. Read it before
 writing a profile of your own; `docs/03-profile.md` in the repository is the schema.
 `examples/hello/` is the smallest universe, an Alpine twin with nothing installed: launch it to
-try `exec` on a machine you have not used the tool on before.
+try `exec` on a machine you have not used the tool on before. `examples/web-site/` is a site
+opened from the host's browser at the URLs its `x-dtu.urls` names; read it before writing a
+profile for a web app.
 
 Every universe launched from this machine leaves a directory under `~/.dtu-lite/universes/<id>/`
 until it is destroyed, and its containers keep running. Destroy what you launch.

@@ -38,6 +38,7 @@ def launch(profile: str | Path, timeout_seconds: int = 600) -> Universe:
         profile_path=loaded.path,
         twin_machine=loaded.twin_machine,
         created_at=state.now(),
+        urls=loaded.x_dtu.urls,
     )
     state.write(record)
     rendered = overlay.render(record, loaded)

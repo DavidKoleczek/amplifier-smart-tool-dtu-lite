@@ -2,14 +2,15 @@
 
 import os
 from pathlib import Path
+from urllib.request import urlopen
 
 import pytest
 
 from dtu_lite import lib
 from dtu_lite.capabilities.universe.profile import EXAMPLES_DIRECTORY
-from dtu_lite.schemas import DtuLiteError
+from dtu_lite.schemas import DtuLiteError, Url
 
-pytestmark = pytest.mark.needs_docker
+pytestmark = [pytest.mark.needs_docker, pytest.mark.live]
 
 ALPINE_PROFILE = """\
 name: live
@@ -23,6 +24,24 @@ services:
     ports: ["{port}:80"]
     healthcheck:
       test: [CMD, "true"]
+      interval: 1s
+"""
+
+
+SERVING_PROFILE = """\
+name: live-urls
+x-dtu:
+  twin_machine: box
+  urls:
+    - {port: 80, path: /api/health, label: Health}
+    - {port: 80, host: site.localhost, label: Home}
+services:
+  box:
+    image: busybox:1.37
+    command: sh -c "mkdir -p /srv/api && echo ok > /srv/api/health && echo home > /srv/index.html && exec httpd -f -p 80 -h /srv"
+    ports: ["{port}:80"]
+    healthcheck:
+      test: [CMD, wget, -q, -O-, "http://localhost/api/health"]
       interval: 1s
 """
 
@@ -64,6 +83,28 @@ def test_launch_exec_destroy_round_trip(tmp_path: Path, state_root: Path, free_p
     with pytest.raises(DtuLiteError) as raised:
         lib.execute(universe.id, "true")
     assert raised.value.code == "universe-not-found"
+
+
+def test_the_urls_the_profile_describes_are_the_ones_the_host_can_open(
+    tmp_path: Path, state_root: Path, free_port: int
+) -> None:
+    profile = tmp_path / "compose.yaml"
+    profile.write_text(SERVING_PROFILE.replace("{port}", str(free_port)))
+
+    universe = lib.launch(profile, timeout_seconds=120)
+    try:
+        health, home = universe.urls
+        assert health == Url(
+            url=f"http://localhost:{free_port}/api/health", port=free_port, path="/api/health", label="Health"
+        )
+        assert home == Url(url=f"http://site.localhost:{free_port}/", port=free_port, path="/", label="Home")
+        assert lib.status(universe.id).urls == universe.urls
+        assert urlopen(health.url, timeout=5).read() == b"ok\n"
+        # Browsers and curl resolve `site.localhost` themselves; the system resolver this test would use may not,
+        # which is the documented caveat, so the name is checked as reported and the page is fetched by address.
+        assert urlopen(home.url.replace("site.localhost", "127.0.0.1"), timeout=5).read() == b"home\n"
+    finally:
+        lib.destroy(universe.id)
 
 
 def test_pushed_files_land_by_docker_cp_rules_owned_by_the_twins_user_and_pull_back(
@@ -121,6 +162,24 @@ def test_a_failing_healthcheck_names_the_container_and_leaves_it_for_inspection(
     assert len(ids) == 1
     assert ids[0] in raised.value.remedy
     lib.destroy(ids[0])
+
+
+def test_the_shipped_web_site_example_reports_named_urls_the_host_can_open(
+    state_root: Path, free_port: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("DTU_WEB_SITE_PORT", str(free_port))
+
+    universe = lib.launch("web-site", timeout_seconds=300)
+    try:
+        assert universe.state == "running"
+        assert [(url.label, url.url) for url in universe.urls] == [
+            ("Home", f"http://web-site.localhost:{free_port}/"),
+            ("Docs", f"http://web-site.localhost:{free_port}/docs/"),
+        ]
+        assert b"<h1>Docs</h1>" in urlopen(f"http://127.0.0.1:{free_port}/docs/", timeout=5).read()
+        assert lib.execute(universe.id, "id -un").stdout == "user\n"
+    finally:
+        lib.destroy(universe.id)
 
 
 @pytest.mark.skipif(not os.environ.get("GH_TOKEN"), reason="needs GH_TOKEN for the copilot-cli example")
