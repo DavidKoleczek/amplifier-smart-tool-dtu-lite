@@ -4,18 +4,70 @@ from pathlib import Path
 import re
 from typing import Any, NamedTuple
 
+from pydantic import BaseModel, ConfigDict, Field
 from python_on_whales.exceptions import DockerException
 
 from dtu_lite.capabilities.universe.compose import compose_client, translate_docker_error
 from dtu_lite.schemas import DtuLiteError
 
-PROFILE_DIRECTORY = Path(".agents") / "digital-twin-universe"
+PROFILE_DIRECTORY = Path(".agents") / "digital-twin-universe-lite"
 EXAMPLES_DIRECTORY = Path(__file__).parents[2] / "examples"
 COMPOSE_FILE_NAMES = ("compose.yaml", "docker-compose.yaml")
 X_DTU = "x-dtu"
 IMPLICIT_TWIN = "twin"
+ALL_PROFILES = ["*"]
 
 ENV_MISSING_PATTERN = re.compile(r"required variable (?P<name>\w+) is missing a value: ?(?P<message>.*)")
+
+
+class Repository(BaseModel):
+    """A local git repository served inside the universe at the URL it stands in for."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    path: Path
+    url: str | None = None
+
+
+class Rewrite(BaseModel):
+    """A `host/path` prefix routed to another URL, usually a service in the same file."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    match: str
+    target: str
+
+
+class UrlSpec(BaseModel):
+    """A name and path for one of the twin's published ports."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    port: int
+    path: str = "/"
+    label: str | None = None
+
+
+class XDtu(BaseModel):
+    """The `x-dtu` block: everything about a universe that Compose itself cannot say."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    description: str | None = None
+    twin_machine: str | None = None
+    urls: list[UrlSpec] = Field(default_factory=list)
+    repositories: list[Repository] = Field(default_factory=list)
+    rewrites: list[Rewrite] = Field(default_factory=list)
+    allow: list[str] = Field(default_factory=list)
+
+    @property
+    def serves_repositories(self) -> bool:
+        return bool(self.repositories)
+
+    @property
+    def needs_gateway(self) -> bool:
+        """A gateway exists only to rewrite or to refuse; a profile that asks for neither gets none."""
+        return bool(self.rewrites or self.allow or any(repository.url for repository in self.repositories))
 
 
 class Profile(NamedTuple):
@@ -26,6 +78,8 @@ class Profile(NamedTuple):
     description: str | None
     twin_machine: str
     services: list[str]
+    x_dtu: XDtu
+    config: dict[str, Any]
 
 
 def resolve_path(profile: str | Path) -> Path:
@@ -53,34 +107,48 @@ def resolve_path(profile: str | Path) -> Path:
     )
 
 
+def read_config(path: Path, profiles: list[str] | None = None) -> dict[str, Any]:
+    """A profile as `docker compose config` reports it: validated, interpolated, and normalized.
+
+    `profiles` activates Compose profiles, which is the only way to see services a `profiles:` entry would leave out.
+    """
+    try:
+        return compose_client(compose_files=[path], profiles=profiles).compose.config(return_json=True)
+    except DockerException as error:
+        raise _profile_error(path, error) from error
+
+
 def load(profile: str | Path) -> Profile:
     """Resolve a profile and read it back through `docker compose config`, which validates and interpolates it."""
     path = resolve_path(profile)
-    try:
-        config = compose_client(compose_files=[path]).compose.config(return_json=True)
-    except DockerException as error:
-        raise _profile_error(path, error) from error
-    return _profile_from_config(path, config)
+    return _profile_from_config(path, read_config(path))
+
+
+def twin_machine(services: list[str], x_dtu: XDtu) -> str:
+    """The service the software under test runs in: named, or the only one, or the one called `twin`."""
+    if x_dtu.twin_machine is not None:
+        return x_dtu.twin_machine
+    return services[0] if len(services) == 1 else IMPLICIT_TWIN
 
 
 def _profile_from_config(path: Path, config: dict[str, Any]) -> Profile:
     services = list(config.get("services") or {})
-    extension = config.get(X_DTU) or {}
-    twin_machine = extension.get("twin_machine")
-    if twin_machine is None:
-        twin_machine = services[0] if len(services) == 1 else IMPLICIT_TWIN
-    if twin_machine not in services:
+    x_dtu = XDtu.model_validate(config.get(X_DTU) or {})
+    twin = twin_machine(services, x_dtu)
+    if twin not in services:
         raise DtuLiteError(
             "profile-invalid",
-            f"{path} names no twin: `{X_DTU}.twin_machine` is {twin_machine!r} and the services are {services}.",
+            f"{path} names no twin: `{X_DTU}.twin_machine` is {twin!r} and the services are {services}.",
             f"Set `{X_DTU}.twin_machine` to the service the software under test runs in.",
         )
     return Profile(
         path=path,
         name=config["name"],
-        description=extension.get("description"),
-        twin_machine=twin_machine,
+        description=x_dtu.description,
+        twin_machine=twin,
         services=services,
+        x_dtu=x_dtu,
+        config=config,
     )
 
 
@@ -117,7 +185,7 @@ def _compose_file_in(directory: Path) -> Path:
 
 
 def _profile_directories(name: str) -> list[Path]:
-    """Where a profile name is looked for: `.agents/digital-twin-universe/<name>` from here up to the git root, then the shipped examples."""
+    """Where a profile name is looked for: `.agents/digital-twin-universe-lite/<name>` from here up to the git root, then the shipped examples."""
     directories: list[Path] = []
     current = Path.cwd().resolve()
     for directory in (current, *current.parents):

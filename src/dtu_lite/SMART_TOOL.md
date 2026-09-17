@@ -71,7 +71,7 @@ carry the rest.
 ## A first universe
 
 A profile is a Compose file with an `x-dtu` block. `launch --profile <name>` looks for
-`.agents/digital-twin-universe/<name>/` in the project, then in the examples shipped under the
+`.agents/digital-twin-universe-lite/<name>/` in the project, then in the examples shipped under the
 skill directory, so the shipped ones launch by name with nothing copied:
 
 ```bash

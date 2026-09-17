@@ -31,6 +31,14 @@ dtu-lite check
 
 `lib.check()`, printed as JSON. Exits 0 when the report says `ok`, 1 when a prerequisite is missing, so `dtu-lite check && dtu-lite launch ...` does the right thing. The report is on stdout either way.
 
+## dtu-lite validate-profile
+
+```bash
+dtu-lite validate-profile --profile <name-or-path>
+```
+
+`lib.validate_profile()`, printed as JSON. Exits 0 when the report has no errors and 1 when it has any, so `dtu-lite validate-profile --profile p && dtu-lite launch --profile p` does the right thing. Warnings never change the exit code. The report is on stdout either way.
+
 ## dtu-lite launch
 
 ```bash

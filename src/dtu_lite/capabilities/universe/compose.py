@@ -14,10 +14,12 @@ PROJECT_LABEL = "com.docker.compose.project"
 DAEMON_DOWN_MARKERS = ("Cannot connect to the Docker daemon", "docker daemon is not running", "error during connect")
 
 
-def compose_client(project: str | None = None, compose_files: list[Path] | None = None) -> DockerClient:
+def compose_client(
+    project: str | None = None, compose_files: list[Path] | None = None, profiles: list[str] | None = None
+) -> DockerClient:
     """A Docker client scoped to one Compose project. With only a project name, Compose finds the stack by label."""
     files: list[str | Path] = list(compose_files or [])
-    return DockerClient(compose_project_name=project, compose_files=files)
+    return DockerClient(compose_project_name=project, compose_files=files, compose_profiles=list(profiles or []))
 
 
 def docker_unavailable() -> DtuLiteError:

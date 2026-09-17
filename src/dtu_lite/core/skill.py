@@ -18,6 +18,11 @@ CAPABILITIES = (
         model_backed=False,
     ),
     Capability(
+        "validate-profile",
+        "Check a profile without launching it: Compose, `x-dtu`, the universe invariants, and realism warnings.",
+        model_backed=False,
+    ),
+    Capability(
         "launch",
         "Launch a universe from a profile name or Compose file and wait until every healthcheck passes.",
         model_backed=False,
@@ -60,6 +65,7 @@ SKILL_RESOURCES = (
     "SMART_TOOL.md",
     "lib.py",
     "examples/copilot-cli/compose.yaml",
+    "examples/served-repository/compose.yaml",
 )
 
 

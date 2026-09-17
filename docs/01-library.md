@@ -59,7 +59,7 @@ class Prerequisite:
 A profile is a Compose file with an `x-dtu` block; [the profile reference](03-profile.md) is the schema.
 Every `profile` argument in this library accepts the same three forms:
 
-- A name, such as `copilot-cli`: the directory `.agents/digital-twin-universe/copilot-cli/`, searched for from the working directory upward to the git root.
+- A name, such as `copilot-cli`: the directory `.agents/digital-twin-universe-lite/copilot-cli/`, searched for from the working directory upward to the git root.
 - A path to a Compose file.
 - A path to a directory, which must hold `compose.yaml` or `docker-compose.yaml`, or, failing both, a `Dockerfile` (not yet implemented).
 
@@ -69,18 +69,17 @@ When nothing is found, the capability raises `profile-not-found`, saying what it
 
 ## Examples
 
-`examples/` in the installed package holds profiles that are complete and known to launch. Each is a directory under the examples root, in the same shape as `.agents/digital-twin-universe/<name>/`, and the skill lists its `compose.yaml` under `<skill_resources>` so an agent reading `--help` can open it and find the `Dockerfile` and anything else it names beside it.
+`examples/` in the installed package holds profiles that are complete and known to launch. Each is a directory under the examples root, in the same shape as `.agents/digital-twin-universe-lite/<name>/`, and the skill lists its `compose.yaml` under `<skill_resources>` so an agent reading `--help` can open it and find the `Dockerfile` and anything else it names beside it.
 
 ```
 examples/
-  copilot-cli/      GitHub Copilot CLI installed as a user would, signed in with the host's GH_TOKEN
+  copilot-cli/          GitHub Copilot CLI installed as a user would, signed in with the host's GH_TOKEN
+  served-repository/    A local git repository cloned in the twin from the URL it stands in for
 ```
 
 The examples root is `skill_directory() / "examples"`.
 
 ## Validate profile
-
-Not yet implemented as a capability; `launch` runs steps 1 to 3 below and stops on any error.
 
 Whether a profile can be launched, and what would be unrealistic about it if it were.
 Deterministic. Needs the Docker CLI for `docker compose config`, which does the Compose-side validation.
@@ -100,7 +99,7 @@ Checks run in this order and every problem is reported, not only the first:
 class ProfileReport:
     path: Path  # the Compose file or Dockerfile that was resolved
     name: str  # the Compose project name base
-    twin_machine: str  # the service that will be the twin
+    twin_machine: str  # the service that will be the twin, empty when the profile names none
     services: list[str]
     ok: bool  # no errors; warnings do not affect it
     errors: list[Finding]
@@ -120,7 +119,9 @@ Raises `profile-not-found` and `docker-unavailable`.
 
 A universe is one Compose project. Its `id` is the project's name, `dtu-<profile name>-<4 hex>`, so `docker compose -p <id> logs` reaches the same stack by hand and `list` can tell two launches of one profile apart.
 
-What the tool renders for a universe lives in its state directory, `~/.dtu-lite/universes/<id>/`: `dtu.yaml`, the overlay (not yet rendered), and `universe.json`, the record: id, name, description, profile path, twin, and creation time. Everything else about a universe is in Docker.
+What the tool renders for a universe lives in its state directory, `~/.dtu-lite/universes/<id>/`: `dtu.yaml`, the overlay, `overlay/`, the files it refers to, including the certificate authority the gateway minted, and `universe.json`, the record: id, name, description, profile path, twin, and creation time. Everything else about a universe is in Docker.
+
+A profile that serves nothing and rewrites nothing renders no overlay at all, so `dtu.yaml` is absent and the universe is exactly the profile.
 The record is how an id leads back to a universe: every capability that takes an `id` reads it first and raises `universe-not-found` when it is missing. A stack whose directory was deleted by hand is no longer a universe to the tool; `docker compose -p <id> down --volumes` clears it.
 
 Every capability that acts on a universe returns this:
@@ -163,8 +164,8 @@ From a profile to a running, ready universe, in one call.
 def launch(profile: str | Path, timeout_seconds: int = 600) -> Universe
 ```
 
-Validates the profile and stops on any error. Assigns an id, renders the overlay, then brings the stack up in the order the overlay needs: the `git` and `gateway` services first when the profile calls for them, then image builds with the universe's network in place, then everything else. Returns when every healthcheck passes.
-Today, with no overlay, that is `docker compose -p <id> -f <profile> up --build --wait`; Compose's progress is passed through to stderr.
+Validates the profile and stops on any error, before anything is recorded or started. Assigns an id, renders the overlay, then brings the stack up in the order it needs: the `git` and `gateway` services first when the profile calls for them, then the certificate authority is taken out to the host, then everything else, building with the gateway reachable. Returns when every healthcheck passes.
+That is `docker compose -p <id> -f <profile> -f <overlay> up --build --wait`, once per pass; Compose's progress is passed through to stderr.
 
 When something fails after containers have started, they are left running so `doctor` and `docker compose logs` have something to read. `destroy` clears them; every failure's remedy names the command.
 

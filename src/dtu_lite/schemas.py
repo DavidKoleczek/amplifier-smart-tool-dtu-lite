@@ -91,6 +91,32 @@ class HostReport(BaseModel):
 
 # endregion
 
+# region: Profile
+
+
+class Finding(BaseModel):
+    """One thing `validate-profile` has to say about a profile, as an error or as a warning."""
+
+    code: str
+    location: str | None = Field(description="Where in the file, such as `services.box.volumes[0]`; None for all of it")
+    message: str
+    remedy: str
+
+
+class ProfileReport(BaseModel):
+    """Whether a profile can be launched, and what would be unrealistic about it if it were."""
+
+    path: Path
+    name: str
+    twin_machine: str = Field(description="Empty when the profile names no twin this tool can find")
+    services: list[str]
+    ok: bool = Field(description="No errors; warnings do not affect it")
+    errors: list[Finding]
+    warnings: list[Finding]
+
+
+# endregion
+
 # region: Universe
 
 UniverseState = Literal["starting", "running", "degraded", "stopped"]

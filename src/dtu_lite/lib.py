@@ -8,9 +8,10 @@ from dtu_lite.capabilities.universe import execute as execute_module
 from dtu_lite.capabilities.universe import files as files_module
 from dtu_lite.capabilities.universe import launch as launch_module
 from dtu_lite.capabilities.universe import status as status_module
+from dtu_lite.capabilities.universe import validate as validate_module
 from dtu_lite.core import manifest
 from dtu_lite.core import skill as skill_module
-from dtu_lite.schemas import Destroyed, ExecResult, HostReport, Manifest, Transfer, Universe
+from dtu_lite.schemas import Destroyed, ExecResult, HostReport, Manifest, ProfileReport, Transfer, Universe
 
 
 def load_manifest() -> Manifest:
@@ -41,6 +42,11 @@ def repository_url() -> str | None:
 def check() -> HostReport:
     """Whether this host can run a universe: the Docker CLI, a reachable daemon, and the Compose plugin."""
     return check_module.check()
+
+
+def validate_profile(profile: str | Path) -> ProfileReport:
+    """Whether a profile can be launched, and what would be unrealistic about it if it were."""
+    return validate_module.validate_profile(profile)
 
 
 def launch(profile: str | Path, timeout_seconds: int = 600) -> Universe:

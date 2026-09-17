@@ -4,14 +4,14 @@ from pathlib import Path
 import re
 import sys
 
-from python_on_whales import ClientNotFoundError
+from python_on_whales import ClientNotFoundError, DockerClient
 from python_on_whales.exceptions import DockerException
 
-from dtu_lite.capabilities.universe import profile as profile_module
-from dtu_lite.capabilities.universe import state
+from dtu_lite.capabilities.universe import overlay, state
+from dtu_lite.capabilities.universe import validate as validate_module
 from dtu_lite.capabilities.universe.compose import compose_client, measure, translate_docker_error
 from dtu_lite.capabilities.universe.state import UniverseRecord
-from dtu_lite.schemas import DtuLiteError, Universe
+from dtu_lite.schemas import DtuLiteError, ProfileReport, Universe
 
 LOG_TAIL = 20
 PORT_IN_USE_PATTERN = re.compile(
@@ -25,7 +25,12 @@ BUILD_FAILED_MARKER = "failed to solve"
 
 def launch(profile: str | Path, timeout_seconds: int = 600) -> Universe:
     """Validate the profile, record the universe, bring the stack up, and return once every healthcheck passes."""
-    loaded = profile_module.load(profile)
+    validation = validate_module.validate(profile)
+    if validation.unreadable is not None:
+        raise validation.unreadable
+    if validation.profile is None:
+        raise _profile_invalid(validation.report)
+    loaded = validation.profile
     record = UniverseRecord(
         id=state.new_id(loaded.name),
         name=loaded.name,
@@ -35,15 +40,36 @@ def launch(profile: str | Path, timeout_seconds: int = 600) -> Universe:
         created_at=state.now(),
     )
     state.write(record)
-    client = compose_client(record.id, [loaded.path])
+    rendered = overlay.render(record, loaded)
+    client = compose_client(record.id, [loaded.path, *rendered.files])
     try:
-        # Compose reports progress on stderr; it is passed through so a person sees the build, and the
-        # exception at the end carries the whole of it so a failure can be named.
-        for _, line in client.compose.up(build=True, wait=True, wait_timeout=timeout_seconds, stream_logs=True):
-            sys.stderr.write(line.decode(errors="replace"))
+        # What the universe provides comes up first, so that the certificate authority exists before anything is
+        # built with it and the git server answers before a build or a command clones from it.
+        if rendered.bootstrap:
+            _up(client, record, timeout_seconds, services=rendered.bootstrap)
+            overlay.export_ca(record, rendered)
+        _up(client, record, timeout_seconds)
     except (ClientNotFoundError, DockerException) as error:
         raise _launch_error(record, timeout_seconds, error) from error
     return measure(record)
+
+
+def _up(client: DockerClient, record: UniverseRecord, timeout_seconds: int, services: list[str] | None = None) -> None:
+    """One `compose up` pass. Compose reports progress on stderr, which is passed through so a person sees it."""
+    for _, line in client.compose.up(
+        services=services, build=True, wait=True, wait_timeout=timeout_seconds, stream_logs=True
+    ):
+        sys.stderr.write(line.decode(errors="replace"))
+
+
+def _profile_invalid(report: ProfileReport) -> DtuLiteError:
+    """Nothing is recorded or started for a profile that is not a universe; the report's errors are the reason."""
+    return DtuLiteError(
+        "profile-invalid",
+        f"{report.path} cannot be launched:\n"
+        + "\n".join(f"  - [{finding.code}] {finding.message}" for finding in report.errors),
+        f"Fix each one; `dtu-lite validate-profile --profile {report.path}` lists them again, with a remedy for each.",
+    )
 
 
 def _launch_error(record: UniverseRecord, timeout_seconds: int, error: Exception) -> DtuLiteError:

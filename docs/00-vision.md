@@ -32,7 +32,7 @@ The tool owns getting that CA trusted in every image where code runs: it is moun
 Trust is a property of the universe, not something each client configures.
 
 A profile with no rewrites and no allowlist renders no gateway, no CA, and no proxy environment. 
-The twin sits on one ordinary network with direct internet access, and published repositories are reachable at their Gitea address.
+The twin sits on one ordinary network with direct internet access, and published repositories are reachable at Gitea's own address.
 
 All of this lives on a private Compose network. Nothing on the host is modified: no DNS changes, no firewall rules, no daemons beyond Docker itself.
 
@@ -48,9 +48,9 @@ Both modes render the same kind of `compose.yaml` and answer to the same command
 
 Compose already runs multi-service stacks, so the value is in what an agent would otherwise have to build or remember each time:
 
-- Local code as if released, out of the box. Name a repository on disk and the URL it will live at, and `git clone`, `pip install`, and `uv tool install` inside the universe fetch the local checkout from that URL. The git server, gateway, TLS termination, CA minting, and trust wiring in every image come with the tool; nobody assembles them by hand.
+- Local code as if released, out of the box. Name a repository on disk and the URL it will live at, and `git clone`, `pip install`, and `uv tool install` inside the universe fetch the local checkout from that URL. The git server, gateway, TLS termination, CA minting, and trust wiring come with the tool; nobody assembles them by hand.
 - Real hosts replaced by services you control. The same gateway routes any `host/path` to a Compose service, so a mock of `api.openai.com` in the profile answers at the real URL, TLS included, and the code under test needs no configuration to talk to it.
-- A place to look. Profiles live at `.agents/digital-twin-universe/<profile-name>/` in a project, so an agent finds them, and `launch --profile <profile-name>` resolves there. Any Compose file or Dockerfile elsewhere, such as an evaluation task's environment, launches by path, and adapts fully by adding an `x-dtu` block.
+- A place to look. Profiles live at `.agents/digital-twin-universe-lite/<profile-name>/` in a project, so an agent finds them, and `launch --profile <profile-name>` resolves there. Any Compose file or Dockerfile elsewhere, such as an evaluation task's environment, launches by path, and adapts fully by adding an `x-dtu` block.
 - Identity. Every universe has an id; `list`, `status`, `exec`, `file-push`, `file-pull`, and `destroy` take it. No project names, file paths, or service names to remember, and the twin is always the target.
 - Failures that name the fix. Every command says what went wrong and what to do about it, in the same terms on every OS. Compose reports for a person reading a terminal; an agent needs the cause and the remedy stated.
 - Checked before it runs. `validate-profile` runs Compose's own validation and then the invariants of a universe: a twin exists, nothing routes around the gateway, served paths are git repositories. Warnings point out where a profile is less realistic than it means to be.
@@ -64,8 +64,9 @@ DTU Lite is held to its own standard: it is verified inside a universe, as a rea
 
 A profile can ask for a Docker daemon inside the twin. 
 The twin then runs a nested daemon (Docker-in-Docker) and any universe launched from within it lives entirely inside that daemon: the host's Docker sees one privileged container, nothing else. 
-The self-validation profile publishes this repository through Gitea and rewrites its GitHub URL, so `uv tool install git+https://github.com/...` inside the twin installs the local checkout as if it were released. 
+The self-validation profile publishes this repository through the universe's Gitea and rewrites its GitHub URL, so `uv tool install git+https://github.com/...` inside the twin installs the local checkout as if it were released. 
 `exec` then drives `dtu-lite check`, `launch`, `exec`, and `destroy` against a sample profile, and a port the sample exposes is chained out through the twin so the host's browser reaches the inner universe.
+The profile is `.agents/digital-twin-universe-lite/self-validation/` in this repository, and `tests/test_live_self_validation.py` runs the whole loop.
 
 Constraints this sets:
 
@@ -78,7 +79,7 @@ Constraints this sets:
 
 - Docker is the only prerequisite. `check` reports whether it is present and usable. `install` offers to install Docker Desktop or Docker Engine through the platform's package manager (winget, brew, apt/dnf) and only acts with explicit consent. If the system does not allow it, `install` says exactly what to do by hand.
 - One interface on every OS. Every command takes the same flags and returns the same JSON on Windows, macOS, and Linux. Platform differences are absorbed inside the tool, never surfaced to the caller.
-- From zero to a running universe in one command after Docker is present: `launch --profile <profile-name>`, resolving under `.agents/digital-twin-universe/`, or `launch --profile path/to/compose.yaml`.
+- From zero to a running universe in one command after Docker is present: `launch --profile <profile-name>`, resolving under `.agents/digital-twin-universe-lite/`, or `launch --profile path/to/compose.yaml`.
 - The profile is a Compose file. The twin, its dependencies, ports, environment, and healthchecks are ordinary Compose services, so nothing is lost in translation and anyone who knows Compose can write one. What Compose cannot say, which service is the twin, which local repositories to publish, and what the gateway rewrites or allows, lives in an `x-dtu` block that plain `docker compose` ignores. The tool renders an overlay file beside it, with Gitea, the gateway, and the trust plumbing, and runs both together.
 - Windows containers are an option, not a requirement. A profile on Windows can ask for a Windows twin; everything else about the tool stays the same.
 - A dashboard, in the style of [mybench-smart-tool](https://github.com/DavidKoleczek/mybench-smart-tool), shows every universe on the machine, what it exposes, and its logs, and lets a person open, shell into, or destroy one without remembering ids.

@@ -2,17 +2,14 @@
 
 import os
 from pathlib import Path
-import shutil
 
 import pytest
 
 from dtu_lite import lib
-from dtu_lite.capabilities.universe import state
 from dtu_lite.capabilities.universe.profile import EXAMPLES_DIRECTORY
 from dtu_lite.schemas import DtuLiteError
 
-DOCKER_READY = shutil.which("docker") is not None and lib.check().ok
-needs_docker = pytest.mark.skipif(not DOCKER_READY, reason="needs a usable Docker daemon")
+pytestmark = pytest.mark.needs_docker
 
 ALPINE_PROFILE = """\
 name: live
@@ -30,16 +27,9 @@ services:
 """
 
 
-@pytest.fixture
-def state_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    monkeypatch.setattr(state, "STATE_ROOT", tmp_path / "state")
-    return tmp_path / "state"
-
-
-@needs_docker
-def test_launch_exec_destroy_round_trip(tmp_path: Path, state_root: Path) -> None:
+def test_launch_exec_destroy_round_trip(tmp_path: Path, state_root: Path, free_port: int) -> None:
     profile = tmp_path / "compose.yaml"
-    profile.write_text(ALPINE_PROFILE.format(port=18590))
+    profile.write_text(ALPINE_PROFILE.format(port=free_port))
 
     universe = lib.launch(profile, timeout_seconds=120)
     try:
@@ -49,7 +39,7 @@ def test_launch_exec_destroy_round_trip(tmp_path: Path, state_root: Path) -> Non
         assert universe.description == "A twin that does nothing"
         assert [service.name for service in universe.services] == ["box"]
         assert universe.services[0].health == "healthy"
-        assert [url.url for url in universe.urls] == ["http://localhost:18590/"]
+        assert [url.url for url in universe.urls] == [f"http://localhost:{free_port}/"]
         assert (state_root / universe.id / "universe.json").is_file()
 
         assert lib.status(universe.id) == universe
@@ -76,12 +66,11 @@ def test_launch_exec_destroy_round_trip(tmp_path: Path, state_root: Path) -> Non
     assert raised.value.code == "universe-not-found"
 
 
-@needs_docker
 def test_pushed_files_land_by_docker_cp_rules_owned_by_the_twins_user_and_pull_back(
-    tmp_path: Path, state_root: Path
+    tmp_path: Path, state_root: Path, free_port: int
 ) -> None:
     profile = tmp_path / "compose.yaml"
-    profile.write_text(ALPINE_PROFILE.format(port=18592).replace("command:", 'user: "1000:1000"\n    command:'))
+    profile.write_text(ALPINE_PROFILE.format(port=free_port).replace("command:", 'user: "1000:1000"\n    command:'))
     source = tmp_path / "src"
     (source / "nested").mkdir(parents=True)
     (source / "a.txt").write_text("a")
@@ -116,12 +105,13 @@ def test_pushed_files_land_by_docker_cp_rules_owned_by_the_twins_user_and_pull_b
         lib.destroy(universe.id)
 
 
-@needs_docker
 def test_a_failing_healthcheck_names_the_container_and_leaves_it_for_inspection(
-    tmp_path: Path, state_root: Path
+    tmp_path: Path, state_root: Path, free_port: int
 ) -> None:
     profile = tmp_path / "compose.yaml"
-    profile.write_text(ALPINE_PROFILE.format(port=18591).replace('[CMD, "true"]', '[CMD, "false"]\n      retries: 1'))
+    profile.write_text(
+        ALPINE_PROFILE.format(port=free_port).replace('[CMD, "true"]', '[CMD, "false"]\n      retries: 1')
+    )
 
     with pytest.raises(DtuLiteError) as raised:
         lib.launch(profile, timeout_seconds=120)
@@ -133,7 +123,6 @@ def test_a_failing_healthcheck_names_the_container_and_leaves_it_for_inspection(
     lib.destroy(ids[0])
 
 
-@needs_docker
 @pytest.mark.skipif(not os.environ.get("GH_TOKEN"), reason="needs GH_TOKEN for the copilot-cli example")
 def test_the_shipped_copilot_example_launches_by_name(state_root: Path) -> None:
     universe = lib.launch("copilot-cli", timeout_seconds=600)

@@ -77,7 +77,7 @@ dtu-lite file-pull --id <id> --source /var/log/app.log --destination ./
 dtu-lite destroy --id <id>
 ```
 
-Profiles live under `.agents/digital-twin-universe/<name>/` in a project; the tool also ships ready-to-launch [examples](src/dtu_lite/examples). See the [profile reference](docs/03-profile.md).
+Profiles live under `.agents/digital-twin-universe-lite/<name>/` in a project; the tool also ships ready-to-launch [examples](src/dtu_lite/examples). See the [profile reference](docs/03-profile.md).
 
 See the [CLI reference](docs/02-cli.md) for every flag and the [library reference](docs/01-library.md) for the Python surface.
 

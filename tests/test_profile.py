@@ -144,7 +144,7 @@ def test_load_reads_the_profile_back_through_compose(tmp_path: Path, monkeypatch
     class FakeClient:
         compose = FakeCompose()
 
-    monkeypatch.setattr(profile_module, "compose_client", lambda compose_files: FakeClient())
+    monkeypatch.setattr(profile_module, "compose_client", lambda compose_files, profiles: FakeClient())
 
     profile = load(compose)
 

@@ -8,10 +8,10 @@ Everything Compose can express, the profile expresses the Compose way; this page
 
 ## Where profiles live
 
-A profile usually belongs to the project it tests, under `.agents/digital-twin-universe/<profile-name>/`. `compose.yaml` is the entry point; the twin's `Dockerfile` and anything it copies in sit beside it.
+A profile usually belongs to the project it tests, under `.agents/digital-twin-universe-lite/<profile-name>/`. `compose.yaml` is the entry point; the twin's `Dockerfile` and anything it copies in sit beside it.
 
 ```
-.agents/digital-twin-universe/
+.agents/digital-twin-universe-lite/
   codex-cli/
     compose.yaml
     Dockerfile
@@ -110,10 +110,10 @@ urls:
 
 Local git repositories served from inside the universe, so the twin can clone and install them from the URL they will have once released. Each has:
 
-- `path`: a repository on the host, relative to the profile. The checked-out branch is served, working tree included, so uncommitted changes are tested too.
+- `path`: a repository on the host, relative to the profile. Every local branch and tag is served. The checked-out branch is the default and carries the working tree, so uncommitted changes are tested too, and a consumer pinning `@main` still finds `main` while the developer sits on a fix branch.
 - `url`: optional. The URL the repository stands in for, such as `https://github.com/microsoft/amplifier-core`. A trailing `.git` or `/` is ignored. Without `url`, the repository is reachable only at the git server's own address, `http://git:3000/dtu/<repo>`.
 
-A request matches a `url` when the host is the same and the path, with a `.git` at the repository boundary ignored, is the `url` path or continues from it with `/`. Query and fragment take no part, and the comparison ignores case, as GitHub and Gitea do. So `https://github.com/microsoft/amplifier` matches every way a tool reaches that repository over its host:
+A request matches a `url` when the host is the same and the path, with a `.git` at the repository boundary ignored, is the `url` path or continues from it with `/`. Query and fragment take no part, and the comparison ignores case, as GitHub and Gitea both do. So `https://github.com/microsoft/amplifier` matches every way a tool reaches that repository over its host:
 
 ```
 /microsoft/amplifier                                        pip and uv git+https, browsers
@@ -148,7 +148,7 @@ The unit of rewriting is one repository: serve `amplifier-foundation` and every 
 
 Only that host is rewritten. Tools that reach a repository some other way are not: SSH clones are not HTTP; `gh` and uv's GitHub fast path use `api.github.com`; npm's `github:` specifier and GitHub tarballs use `codeload.github.com`; `raw.githubusercontent.com` is its own host. `launch` sets `UV_NO_GITHUB_FAST_PATH=true` so uv falls back to `git fetch`, which is rewritten. The rest go to the real host, and a served repository is not there.
 
-The server is Gitea, so its web UI and API are there too, but nothing in the profile depends on that.
+The server is Gitea, so the archive endpoints an installer downloads, the API a tool queries, and the web pages a person opens all answer as well as `git clone` does. Nothing in the profile depends on that: it is one service in the overlay, reached only through the URL the profile already wrote.
 
 ### `rewrites`
 
@@ -168,20 +168,34 @@ Optional. Hostnames the universe may reach. When present, everything else is ref
 
 ## What `launch` adds
 
-Not yet implemented: today `launch` runs the profile as is, which is exactly right for a profile with no `repositories`, `rewrites`, or `allow`.
-
 The overlay, rendered into the universe's state directory and run as a second `-f` file, never edits the profile:
 
-- A `git` service when `repositories` is set, populated before anything that depends on it starts.
-- A `gateway` service when any `repositories[].url`, `rewrites`, or `allow` is set. It is the only route out. It terminates TLS for rewritten hosts with a CA it mints on first start.
-- On every service when the gateway is present: the CA mounted read-only and named in `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, `GIT_SSL_CAINFO`, `NODE_EXTRA_CA_CERTS`, `PIP_CERT`, and `CURL_CA_BUNDLE`, with `UV_NATIVE_TLS=true` so uv uses it too; the gateway in `HTTP_PROXY` and `HTTPS_PROXY` with `NO_PROXY=localhost,127.0.0.1,::1`; `UV_NO_GITHUB_FAST_PATH=true` when a `github.com` URL is rewritten; the same values as `build.args` with `build.network` set to the universe's network; and `depends_on` the gateway.
+- A `git` service when `repositories` is set: Gitea, at `http://git:3000/dtu/<name>`. Each repository is copied from its read-only mount, its working tree committed in the copy, and pushed in. The host checkout is never written to, and its own hooks never run.
+- A `gateway` service when any `repositories[].url`, `rewrites`, or `allow` is set. It is the only route out. It terminates TLS for the hosts it rewrites, with a certificate authority it mints on first start, and tunnels every other host through untouched, with that host's real certificate. An `allow` list is the exception: refusing a request means reading it, so every host is terminated when one is set.
+- On every service when the gateway is present: the authority mounted at `/etc/dtu/ca.crt` and named in `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, `GIT_SSL_CAINFO`, `NODE_EXTRA_CA_CERTS`, `PIP_CERT`, and `CURL_CA_BUNDLE`, with `UV_NATIVE_TLS=true` so uv uses it and `NODE_USE_ENV_PROXY=1` so Node uses the proxy at all; the gateway in `HTTP_PROXY` and `HTTPS_PROXY` with `NO_PROXY=localhost,127.0.0.1,::1,git,gateway`; `UV_NO_GITHUB_FAST_PATH=true` when a `github.com` URL is rewritten; and `depends_on` on what the universe provides.
+- On every service that builds: the proxy as `build.args`, which BuildKit passes to `RUN` without being asked, and the authority as the `dtu-ca` build context, which a Dockerfile has to copy from. See below.
 - One network the whole universe shares.
 
-The service names `git` and `gateway` are reserved. A profile with no `repositories[].url`, no `rewrites`, and no `allow` renders no gateway, no CA, and no proxy environment.
+The mounted authority is the public roots with the universe's own appended, because every variable that names a bundle replaces the trust store rather than adding to it. A tunnelled host and a rewritten host both verify.
+
+The service names `git` and `gateway` are reserved. A profile with no `repositories[].url`, no `rewrites`, and no `allow` renders no gateway, no authority, and no proxy in anyone's environment.
+
+### Trusting the universe during a build
+
+A build reaches the gateway on its own: BuildKit predefines the proxy arguments. Nothing else reaches it. A build argument no `ARG` declares is invisible to `RUN`, so the authority cannot be handed to a build the way it is handed to a running container, and a build that clones a rewritten URL has to say that it trusts the universe:
+
+```dockerfile
+COPY --from=dtu-ca ca.crt /usr/local/share/ca-certificates/dtu-lite.crt
+RUN update-ca-certificates
+```
+
+Two lines, and only for a profile that installs during the build rather than at runtime. Without them the universe still works everywhere else, since `launch` mounts the same file into the running container. `examples/served-repository` is a worked profile that does it.
+
+Both lines are Debian and Alpine shaped. An image whose certificates live elsewhere writes its own equivalent; the build context is called `dtu-ca` and the file in it is `ca.crt`.
 
 ## What `validate-profile` checks
 
-Of these, `launch` runs `docker compose config` and the `twin_machine` check today; the rest arrive with `validate-profile`.
+`launch` runs all of it first and refuses a profile with any error, before anything is recorded or started.
 
 `docker compose config` first, so the Compose side is validated by Compose itself, interpolation included, and an unset `${NAME}` fails naming the variable. Then `x-dtu` against its schema, then the invariants that make the file a universe rather than just a Compose project. Errors:
 
@@ -189,8 +203,10 @@ Of these, `launch` runs `docker compose config` and the `twin_machine` check tod
 - A service is named `git` or `gateway`.
 - A `repositories[].path` is not a git repository, or `url` has no host and path.
 - A service sets `network_mode`, `networks`, `dns`, or `extra_hosts` while the gateway would be present, since each bypasses it.
-- A service is gated behind a Compose `profiles:` entry that would leave the twin out.
+- The twin is gated behind a Compose `profiles:` entry that would leave it out.
 - Windows and Linux services in one file.
+
+The codes are `twin-missing`, `reserved-service-name`, `repository-not-git`, `repository-url-invalid`, `routes-around-gateway`, `twin-excluded-by-compose-profile`, `mixed-platforms`, and `x-dtu-invalid`, plus `env-missing` and `profile-invalid` from Compose itself.
 
 Warnings, since each is legitimate sometimes but usually not what a realistic profile means:
 
@@ -199,11 +215,33 @@ Warnings, since each is legitimate sometimes but usually not what a realistic pr
 - The twin has no `healthcheck`, so `launch` cannot wait for it to be ready.
 - The twin runs as `root`.
 
+Their codes are `no-long-running-command`, `bind-mount`, `no-healthcheck`, and `runs-as-root`.
+
+## A change to someone else's repository
+
+The universe serves a checkout; where the checkout came from is not its concern. So testing a change to an upstream repository, before it is a pull request or anything else, is one clone away:
+
+```bash
+git clone https://github.com/microsoft/amplifier-core ~/work/amplifier-core
+cd ~/work/amplifier-core && git checkout -b fix-thing
+# edit; commit or do not
+```
+
+```yaml
+repositories:
+  - path: ~/work/amplifier-core
+    url: https://github.com/microsoft/amplifier-core
+```
+
+Inside the universe, `pip install git+https://github.com/microsoft/amplifier-core` and everything that fetches from that URL get the fix, and `microsoft/amplifier-foundation`, `microsoft/amplifier-bundle-*`, and every other repository still come from GitHub. Serve several to change several. The consumer never learns that anything was rewritten, which is the point: it installs what it would install on release day.
+
+The tool's own `.agents/digital-twin-universe-lite/self-validation/` is this pattern applied to itself, with `path: ../../..`.
+
 ## Adapting an existing Compose file
 
 A project that already has a `compose.yaml` and a `Dockerfile` is most of the way there:
 
-1. Copy them into `.agents/digital-twin-universe/<profile-name>/` rather than pointing at the originals, since the profile will diverge from the development setup.
+1. Copy them into `.agents/digital-twin-universe-lite/<profile-name>/` rather than pointing at the originals, since the profile will diverge from the development setup.
 2. Add `x-dtu` with `twin_machine` naming the service the code under test runs in.
 3. Replace bind mounts of source code with the clone and install a user would do. Declare the repository under `x-dtu.repositories` and have the `Dockerfile` or `command` install it from its URL.
 4. Pass secrets as `${NAME}` in `environment` rather than through a committed `.env`.

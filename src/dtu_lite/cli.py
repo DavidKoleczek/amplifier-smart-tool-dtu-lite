@@ -55,6 +55,23 @@ def check() -> None:
         raise typer.Exit(code=1)
 
 
+@app.command("validate-profile")
+def validate_profile(
+    profile: Annotated[
+        str, typer.Option(help="A profile name, a Compose file, or a directory holding one. See `--help` for names.")
+    ],
+) -> None:
+    """Check a profile without launching it: Compose, `x-dtu`, the universe invariants, and realism. Deterministic.
+
+    Prints the report as JSON. Exits 0 when it has no errors, 1 when it has any; warnings never change the code.
+    Exits 1 with the cause and remedy when the profile cannot be found or Docker is unusable.
+    """
+    report = lib.validate_profile(profile)
+    typer.echo(report.model_dump_json(indent=2))
+    if not report.ok:
+        raise typer.Exit(code=1)
+
+
 @app.command()
 def launch(
     profile: Annotated[
