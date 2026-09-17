@@ -63,6 +63,9 @@ dtu-lite check
 # Plan Docker setup from official docs (model-backed); add --yes to act
 dtu-lite install
 
+# Write a profile from a description and the project, and prove it by launching it (model-backed)
+dtu-lite create-profile --description "a FastAPI app on port 8000 using Postgres" --project .
+
 # Launch a universe from a profile name or Compose file and wait until it is ready
 dtu-lite launch --profile <name-or-path>
 
@@ -80,6 +83,9 @@ dtu-lite file-pull --id <id> --source /var/log/app.log --destination ./
 
 # Take it down
 dtu-lite destroy --id <id>
+
+# A web page listing every universe on this machine; prints its URL
+dtu-lite dashboard
 ```
 
 Profiles live under `.agents/digital-twin-universe-lite/<name>/` in a project; the tool also ships ready-to-launch [examples](src/dtu_lite/examples). See the [profile reference](docs/03-profile.md).

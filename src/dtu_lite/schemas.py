@@ -240,3 +240,81 @@ class Destroyed(BaseModel):
 
 
 # endregion
+
+# region: Create profile
+
+CreateOutcome = Literal["created", "validated", "failed"]
+CheckStatus = Literal["pending", "passed", "failed", "skipped"]
+
+
+class Check(BaseModel):
+    """One command run in the twin that proves a claim the profile's summary makes."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    command: str = Field(description="Run in the twin through `execute`")
+    expect_stdout: str | None = Field(description="A substring stdout must contain; None means exit 0 is enough")
+    status: CheckStatus
+    detail: str | None = Field(description="The exit code and last lines of output when it did not pass")
+
+
+class ProfileDraft(BaseModel):
+    """What the agent submits: the profile and the evidence it ran. The tool supplies the verdict."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    summary: str = Field(description="What the universe is and how the software gets into it")
+    files: list[str] = Field(description="Relative to the draft directory")
+    environment: list[str] = Field(description="Host variables the profile reads with ${NAME:?...}")
+    universe_id: str | None = Field(description="The universe launched from this draft; None only without verify")
+    checks: list[Check] = Field(description="With status and detail as the agent saw them in that universe")
+    notes: list[str] = Field(description="Trade-offs, what was left unrealistic and why, missing documentation")
+
+
+class Cleanup(BaseModel):
+    """What the cleanup turn did."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    destroyed: list[str] = Field(description="Universe ids")
+    removed: list[str] = Field(description="Host paths outside the draft the agent created and deleted")
+    profile_changed: bool = Field(description="Whether compose.yaml or anything the build reads was edited")
+    notes: list[str]
+
+
+class CreatedProfile(BaseModel):
+    """A profile that was written, checked, and either kept under its name or left as a draft."""
+
+    outcome: CreateOutcome
+    name: str
+    path: Path = Field(description="`<name>/` when the outcome is created or validated, `<name>.draft/` when failed")
+    summary: str
+    files: list[str]
+    environment: list[str]
+    validation: ProfileReport = Field(description="The last validate-profile")
+    checks: list[Check] = Field(description="The tool's own run, not the agent's")
+    universe_id: str | None = Field(
+        description="The tool's universe when it is still up: kept, or left after a failure"
+    )
+    urls: list[Url] = Field(description="The kept universe's published ports; empty otherwise")
+    attempts: int
+    cleanup: Cleanup | None = Field(description="None when the run failed before a cleanup turn made sense")
+    notes: list[str]
+    next: str = Field(description="One instruction for the person")
+
+
+# endregion
+
+# region: Dashboard
+
+
+class Dashboard(BaseModel):
+    """Where the dashboard is being served, and who can reach it."""
+
+    url: str = Field(description="What to open in a browser")
+    host: str = Field(description="The interface that was bound")
+    port: int
+    reachable: str = Field(description="`only this machine`, or the local network when bound to every interface")
+
+
+# endregion

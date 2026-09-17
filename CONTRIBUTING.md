@@ -10,6 +10,7 @@ Install:
 - [uv](https://docs.astral.sh/uv/getting-started/installation/): Manages Python environments
 - [prek](https://github.com/j178/prek): Used for precommit hooks. Recommended to install through PyPI/uv with `uv tool install prek`. Use `uv tool upgrade prek` to update it.
 - [GitHub CLI](https://cli.github.com/) for intelligence features with GitHub Copilot.
+- [Node.js](https://nodejs.org/) 22+ and [pnpm](https://pnpm.io/installation), optional: only to change the dashboard's frontend. The compiled dashboard is committed, so running it needs neither.
 - [GitHub Copilot subscription](https://github.com/github/copilot-cli#prerequisites) for intelligent features.
 
 ### Initial Setup
@@ -93,6 +94,39 @@ uv run pytest -n0 tests/test_live_universe.py -k round_trip -s
 ```
 
 Each worker hands out host ports from its own range (`free_port` in `tests/conftest.py`), so parallel launches never collide on a port.
+
+#### Dashboard Development
+
+The dashboard is a Vite+TS+React app in `dashboard/`, served by the library from compiled assets in `src/dtu_lite/capabilities/dashboard/static/`.
+Those assets are committed, because the tool installs from this git repository and must run with no Node present.
+The `dashboard` precommit hook runs `uv run build-dashboard.py` whenever frontend source changes: with pnpm present it installs, lints, formats, type checks, and recompiles; without pnpm it says so and passes, since a Python-only change cannot have touched the frontend.
+
+Install dependencies (also done by `setup-for-dev.py` when pnpm is present):
+
+```bash
+pnpm --dir dashboard install --frozen-lockfile
+```
+
+Run with hot reload (two terminals):
+
+```bash
+uv run dtu-lite dashboard --port 5199
+pnpm --dir dashboard dev
+```
+
+The Vite dev server proxies `/api` to port 5199; set `DTU_LITE_API_URL` to point it elsewhere.
+
+Lint, format, and type check:
+
+```bash
+pnpm --dir dashboard check
+```
+
+Compile the assets into the package, then commit them:
+
+```bash
+pnpm --dir dashboard build
+```
 
 #### References
 

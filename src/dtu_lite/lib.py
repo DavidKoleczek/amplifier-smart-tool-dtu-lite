@@ -3,11 +3,14 @@
 from pathlib import Path
 
 from dtu_lite.capabilities.check import check as check_module
+from dtu_lite.capabilities.create_profile import create as create_module
+from dtu_lite.capabilities.dashboard import server as dashboard_module
 from dtu_lite.capabilities.install import install as install_module
 from dtu_lite.capabilities.universe import destroy as destroy_module
 from dtu_lite.capabilities.universe import execute as execute_module
 from dtu_lite.capabilities.universe import files as files_module
 from dtu_lite.capabilities.universe import launch as launch_module
+from dtu_lite.capabilities.universe import state
 from dtu_lite.capabilities.universe import status as status_module
 from dtu_lite.capabilities.universe import validate as validate_module
 from dtu_lite.core import manifest
@@ -15,6 +18,8 @@ from dtu_lite.core import skill as skill_module
 from dtu_lite.intelligence.interface import Intelligence
 from dtu_lite.schemas import (
     DEFAULT_INTELLIGENCE_MODEL,
+    CreatedProfile,
+    Dashboard,
     Destroyed,
     DtuLiteError,
     ExecResult,
@@ -87,6 +92,62 @@ def _verify_universe() -> None:
         )
 
 
+def create_profile(
+    description: str,
+    project: Path | None = None,
+    name: str | None = None,
+    verify: bool = True,
+    keep: bool = False,
+    overwrite: bool = False,
+    max_attempts: int = 3,
+    model: str = DEFAULT_INTELLIGENCE_MODEL,
+    reasoning_effort: ReasoningEffort = "low",
+    timeout_seconds: int = 1800,
+    intelligence: Intelligence | None = None,
+) -> CreatedProfile:
+    """Write a profile from a description and prove it by launching it. Model-backed; needs Docker."""
+    return create_module.create_profile(
+        _universes(),
+        check,
+        description,
+        project,
+        name,
+        verify,
+        keep,
+        overwrite,
+        max_attempts,
+        model,
+        reasoning_effort,
+        timeout_seconds,
+        intelligence,
+    )
+
+
+def _universes() -> create_module.Universes:
+    """The universe capabilities `create_profile` drives, bound late so the module functions here stay the source."""
+    return create_module.Universes(
+        validate=validate_profile,
+        launch=launch,
+        execute=lambda id, command, timeout_seconds: execute(id, command, timeout_seconds=timeout_seconds),
+        destroy=destroy,
+        list_universes=list_universes,
+        recorded=_recorded_ids,
+        relocate=_relocate,
+    )
+
+
+def _recorded_ids() -> list[str]:
+    """Ids of every universe with a record on this machine, read without Docker and cheap enough to poll."""
+    return [path.name for path in state.STATE_ROOT.iterdir()] if state.STATE_ROOT.is_dir() else []
+
+
+def _relocate(id: str, profile_path: Path) -> None:
+    """Point a universe's record at the profile's new location after a rename, so `list` tells the truth."""
+    record = state.read(id)
+    record.profile_path = profile_path
+    state.write(record)
+
+
 def validate_profile(profile: str | Path) -> ProfileReport:
     """Whether a profile can be launched, and what would be unrealistic about it if it were."""
     return validate_module.validate_profile(profile)
@@ -136,3 +197,16 @@ def pull_files(id: str, source: str, destination: Path) -> Transfer:
 def destroy(id: str) -> Destroyed:
     """Remove a universe: every container, network, and volume, and its state directory. Images stay."""
     return destroy_module.destroy(id)
+
+
+def serve_dashboard(port: int | None = None, host: str = "127.0.0.1") -> Dashboard:
+    """Serve the dashboard from a background thread and return where it is; it lives until the process exits.
+
+    The web app is compiled assets shipped with the package; its data is a JSON API over `list_universes`,
+    `status`, and `destroy`, so the dashboard adds no capability of its own.
+
+    Args:
+        port: The port to bind; a free one is chosen when omitted.
+        host: The interface to bind. The default keeps the server off the local network.
+    """
+    return dashboard_module.serve_dashboard(port, host)

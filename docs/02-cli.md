@@ -39,6 +39,16 @@ dtu-lite install [--yes] [--accept-license] [--model ...] [--reasoning-effort lo
 
 `lib.install()`, with `--yes` as `apply=True`, printed as JSON. One progress line per step goes to stderr while `--yes` runs, so a person watching a long download knows it is alive. Exits 0 on `ready` or `installed` and 1 otherwise, so `dtu-lite install --yes && dtu-lite launch ...` behaves like `check`.
 
+## dtu-lite create-profile
+
+```bash
+dtu-lite create-profile --description "a FastAPI app on port 8000 using Postgres" [--project .] [--name web-app]
+                        [--no-verify] [--keep] [--overwrite] [--max-attempts 3] [--model ...]
+                        [--reasoning-effort low] [--timeout-seconds 1800]
+```
+
+`lib.create_profile()`, with `--no-verify` as `verify=False`, printed as JSON. One progress line per phase goes to stderr (authoring, validating, launching, checking, destroying, cleaning up); Compose's own progress goes there too through `launch`. The agent's own launches run inside its shell and are not echoed, so the authoring phase is simply long. Exits 0 on `created` or `validated`, 1 on `failed`, and 2 on `--keep` with `--no-verify`.
+
 ## dtu-lite validate-profile
 
 ```bash
@@ -98,6 +108,14 @@ dtu-lite destroy --id <id>
 ```
 
 `lib.destroy()`, printed as JSON.
+
+## dtu-lite dashboard
+
+```bash
+dtu-lite dashboard [--port <n>] [--host 127.0.0.1]
+```
+
+`lib.serve_dashboard()`, printed as JSON: the URL to open and who can reach it. The command then keeps serving until Ctrl+C, which exits 0. Exits 1 with `port-in-use` when `--port` names a held port; without `--port` a free one is chosen.
 
 ## Adding a command
 

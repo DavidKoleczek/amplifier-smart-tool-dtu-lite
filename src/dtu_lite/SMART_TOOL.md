@@ -54,10 +54,10 @@ wrapper over it, so anything you can do from the shell you can also do from Pyth
 ## Command surfaces
 
 Deterministic commands run with no model provider configured. Today those are `check`,
-`validate-profile`, `launch`, `list`, `status`, `exec`, `file-push`, `file-pull`, and `destroy`; the capability
-list below is authoritative. `install` is model-backed unless Docker is already usable, and says so
-in its help text. Serve commands run a local web UI over the same
-library.
+`validate-profile`, `launch`, `list`, `status`, `exec`, `file-push`, `file-pull`, `destroy`, and `dashboard`; the
+capability list below is authoritative. `install` is model-backed unless Docker is already usable, and
+`create-profile` is model-backed; both say so in their help text. `dashboard` serves a local web page over the same library: every universe on the machine, its
+URLs, and a destroy button, for a person rather than an agent.
 
 ## Before writing code
 
@@ -96,6 +96,17 @@ profile for a web app.
 
 Every universe launched from this machine leaves a directory under `~/.dtu-lite/universes/<id>/`
 until it is destroyed, and its containers keep running. Destroy what you launch.
+
+## Writing a profile
+
+`dtu-lite create-profile --description "<what the universe is for>" --project <repository>` has an agent
+read the project and Docker's own documentation, write the profile under
+`.agents/digital-twin-universe-lite/<name>/`, launch it, run checks in the twin, and destroy it; the tool
+then launches it again, reruns the checks, and keeps the profile only when it passes. The result names
+the profile, the checks as the tool saw them, and one `next` step. It exits 1 on `failed` and leaves the
+draft at `<name>.draft/` for a person to finish. Add `--keep` to leave the verified universe running
+and get its id and URLs back. It costs a few minutes and a model call per attempt; for a profile you can
+write from the examples, `validate-profile` and `launch` are enough.
 
 ## Install
 

@@ -1,7 +1,9 @@
 """Command line entry point for DTU Lite."""
 
+import contextlib
 import json
 from pathlib import Path
+import threading
 from typing import Annotated
 
 import typer
@@ -82,6 +84,57 @@ def install(
     report = lib.install(yes, accept_license, model, reasoning_effort, timeout_seconds)
     typer.echo(report.model_dump_json(indent=2))
     if report.outcome not in ("ready", "installed"):
+        raise typer.Exit(code=1)
+
+
+@app.command("create-profile")
+def create_profile(
+    description: Annotated[str, typer.Option(help="What the universe is for, in your own words.")],
+    project: Annotated[
+        Path | None, typer.Option(help="The repository to profile. Omit when the description is everything.")
+    ] = None,
+    name: Annotated[
+        str | None, typer.Option(help="The profile name; derived from the description when omitted.")
+    ] = None,
+    no_verify: Annotated[
+        bool, typer.Option("--no-verify", help="Stop at validate-profile; neither the agent nor the tool launches.")
+    ] = False,
+    keep: Annotated[bool, typer.Option(help="Leave the tool's verified universe running and report it.")] = False,
+    overwrite: Annotated[bool, typer.Option(help="Replace an existing profile of the same name.")] = False,
+    max_attempts: Annotated[int, typer.Option(min=1, help="Submissions the tool will consider.")] = 3,
+    model: Annotated[
+        str, typer.Option(help="The intelligence model that writes the profile.")
+    ] = DEFAULT_INTELLIGENCE_MODEL,
+    reasoning_effort: Annotated[ReasoningEffort, typer.Option(help="The model's reasoning effort.")] = "low",
+    timeout_seconds: Annotated[
+        int, typer.Option(min=1, help="Deadline for the whole run; a launch with builds takes minutes.")
+    ] = 1800,
+) -> None:
+    """Write a profile under .agents/digital-twin-universe-lite/<name>/ and prove it. Model-backed: an agent reads
+    the project and Docker's docs, writes the profile, launches it, runs checks in it, and destroys it; the tool
+    then launches it again and reruns the checks, and only a profile that passes is kept.
+
+    Prints CreatedProfile JSON on stdout, one progress line per phase on stderr. Exits 0 on created or validated,
+    1 on failed (the draft stays at <name>.draft/), 2 on --keep with --no-verify. Raises profile-exists,
+    project-not-found, name-invalid, profile-rejected, create-timeout, docker-unavailable, or a gh preflight
+    error with the cause and remedy.
+    """
+    if keep and no_verify:
+        raise typer.BadParameter("--keep leaves a verified universe running, and --no-verify launches none.")
+    result = lib.create_profile(
+        description,
+        project,
+        name,
+        not no_verify,
+        keep,
+        overwrite,
+        max_attempts,
+        model,
+        reasoning_effort,
+        timeout_seconds,
+    )
+    typer.echo(result.model_dump_json(indent=2))
+    if result.outcome == "failed":
         raise typer.Exit(code=1)
 
 
@@ -196,6 +249,23 @@ def destroy(id: Annotated[str, typer.Option(help="The universe id `launch` print
     Prints what was removed as JSON.
     """
     typer.echo(lib.destroy(id).model_dump_json(indent=2))
+
+
+@app.command()
+def dashboard(
+    port: Annotated[int | None, typer.Option(help="The port to bind; a free one is chosen when omitted.")] = None,
+    host: Annotated[str, typer.Option(help="The interface to bind; 0.0.0.0 exposes it to the local network.")] = (
+        "127.0.0.1"
+    ),
+) -> None:
+    """Serve the dashboard, a web page listing every universe on this machine, and print its URL. Deterministic.
+
+    Prints where it is served as JSON, then keeps serving until Ctrl+C. Exits 1 with the cause and remedy when
+    the port is held.
+    """
+    typer.echo(lib.serve_dashboard(port, host).model_dump_json(indent=2))
+    with contextlib.suppress(KeyboardInterrupt):
+        threading.Event().wait()
 
 
 def main() -> int:

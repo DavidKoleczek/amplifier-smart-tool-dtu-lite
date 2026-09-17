@@ -26,3 +26,10 @@ repos:
         language: system
         types_or: [python, pyi]
         pass_filenames: false
+
+      - id: dashboard
+        name: dashboard check and build
+        entry: uv run build-dashboard.py
+        language: system
+        files: ^dashboard/
+        pass_filenames: false

@@ -1,6 +1,7 @@
 reference/
 temp/
 notes/
+evaluation/
 .env
 .agents/skills/
 skills-lock.json

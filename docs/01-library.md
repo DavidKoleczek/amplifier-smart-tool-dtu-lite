@@ -75,6 +75,44 @@ Every step in `InstallReport.steps` keeps its status and, when it failed, the la
 
 Raises `docs-unreachable` (with the pages to read by hand), `plan-rejected`, `install-timeout` (with the report so far), and the intelligence preflight codes `gh-missing` and `gh-not-signed-in`.
 
+## Create profile
+
+From "I want a universe for X" to a profile at `.agents/digital-twin-universe-lite/<name>/` that has been launched and exercised, not just written. Model-backed; needs Docker.
+
+```python
+def create_profile(
+    description: str,                        # what the universe is for, in the user's words
+    project: Path | None = None,             # the repository to profile; None means the description is everything
+    name: str | None = None,                 # profile name; derived from the description when None
+    verify: bool = True,                     # agent and tool both launch and run the checks; False stops both at validate-profile
+    keep: bool = False,                      # leave the tool's verified universe running and report it; needs verify
+    overwrite: bool = False,                 # replace an existing <name>/
+    max_attempts: int = 3,                   # submissions the tool will consider; the agent iterates within each
+    model: str = DEFAULT_INTELLIGENCE_MODEL,
+    reasoning_effort: ReasoningEffort = "low",
+    timeout_seconds: int = 1800,             # the whole run; a launch with builds is minutes
+    intelligence: Intelligence | None = None,
+) -> CreatedProfile
+```
+
+The agent has tools and the tool has the verdict. The agent works in the project root (the git root above `project`, or `project` itself, or the working directory without one) with `view`, `grep`, `bash`, `edit`, and `write`, reading the repository and a local clone of Docker's documentation, and writing only into `<name>.draft/` beside where the profile will land. It must validate, launch, run every check in the twin, and destroy on its own before submitting, and the submission is accepted only when it carries the id of a universe the tool saw appear during the run and a passed result for every check; anything less is sent back once as a correction, then `profile-rejected`. The tool then validates, launches, reruns the same checks through `execute`, and destroys. Only a draft that passes for the tool is renamed to `<name>/`.
+
+After the tool's verdict, one more turn in the same session asks the agent to clean up: destroy anything it launched that is still listed, remove scratch it made outside the draft, and take out of the profile anything that was there only for iteration. When that edits the profile, or the draft's files differ afterwards whatever the agent said, the tool validates and launches once more before promoting.
+
+```
+created      the agent launched and checked, the tool launched and checked, cleanup ran; <name>/ exists
+validated    verify=False; validate-profile has no errors; <name>/ exists
+failed       attempts exhausted, or a variable the profile rightly demands is unset; <name>.draft/ holds the last attempt
+```
+
+`CreatedProfile.checks` is the tool's own run, not the agent's. `env-missing` is never sent back to the agent as a defect: the profile is right to demand the variable, so the run ends `failed` with `next` saying what to export. `keep=True` leaves the tool's verified universe running with its `universe_id` and `urls` in the result and its record pointed at `<name>/`; when cleanup changed the profile, the universe launched from the cleaned profile is the one kept.
+
+The tool destroys only universes it launched itself. Universes the agent launched are the agent's to destroy, in the authoring turns and again in the cleanup turn. A universe whose record's `profile_path` is under the draft can only have come from this run, so any such universe still listed at the end goes into `notes` with its id and `next` names its `destroy` command; the tool does not sweep it, since a sweep by name would take down a universe someone else launched from a profile of the same name.
+
+The documentation the agent reads is kept at `~/.dtu-lite/reference/`: a sparse, shallow clone of `docker/docs` holding the Compose file reference, the Compose manual, and the build manual, plus the Dockerfile reference fetched from BuildKit, refreshed when older than seven days. Without `git` or without network the reference is reported absent in `notes` and the run goes on.
+
+Raises `profile-exists`, `project-not-found`, `name-invalid`, `keep-needs-verify`, `docker-unavailable`, `profile-rejected` (the agent's submission was unusable after the correction round), `create-timeout` (with the report so far), and the intelligence preflight codes. A failed verification is an outcome, not an exception.
+
 ## Profiles
 
 A profile is a Compose file with an `x-dtu` block; [the profile reference](03-profile.md) is the schema.
@@ -237,6 +275,28 @@ def destroy(id: str) -> Destroyed
 
 Raises `universe-not-found` and `docker-unavailable`.
 
+## Dashboard
+
+A web page for a person: every universe on this machine, its state, its URLs, and a destroy button, so nobody has to remember ids. Deterministic.
+
+```python
+def serve_dashboard(port: int | None = None, host: str = "127.0.0.1") -> Dashboard
+```
+
+Binds the port, starts serving from a daemon thread, and returns at once with `Dashboard`: the `url` to open and `reachable`, which says whether that is only this machine or the local network. The server lives until the process exits; the CLI blocks for it. The default host keeps it off the network; pass `0.0.0.0` to expose it deliberately.
+
+The page is compiled assets shipped inside the package at `capabilities/dashboard/static/`, so running it needs nothing beyond the Python dependencies. Its data is a JSON API, each route one library call and nothing more:
+
+```
+GET    /api/universes         list_universes()
+GET    /api/universes/{id}    status(id)
+DELETE /api/universes/{id}    destroy(id)
+```
+
+A `DtuLiteError` on any route is the body `{"code", "message", "remedy"}`: 404 for `universe-not-found`, 503 for `docker-unavailable`, 500 otherwise. Every other path serves the page. The dashboard adds no capability; a capability it should show gets a route that calls it.
+
+Raises `port-in-use`.
+
 ## Intelligence
 
 Model-backed capabilities run through the `Intelligence` protocol in `dtu_lite.intelligence.interface`:
@@ -252,6 +312,7 @@ class Intelligence(Protocol):
 `preflight` raises `DtuLiteError` naming what to configure when the implementation cannot run.
 `run` executes one agent: `AgentRequest` holds the prompt, model, optional workspace, and optional output schema; `AgentResult` holds the text, structured output, or error.
 Setting `AgentRequest.resume` to an earlier `AgentResult.session_id` continues that session instead of starting a fresh one, so the agent keeps what it learned.
+A request with a `workspace` gives the agent `view`, `grep`, and `bash` in that directory on this host, and `edit` and `write` too when `writable`. `bash` is not sandboxed to the workspace: what bounds the agent is the caller's prompt, and the caller validates everything the agent produced before any of it is kept, the way `create_profile` checks that every file lies in the draft and launches the draft itself.
 
 `default_intelligence()` returns the shipped implementation, `CopilotIntelligence`, built on the [GitHub Copilot SDK](https://github.com/github/copilot-sdk) and signed in through the GitHub CLI.
 Another implementation is a module satisfying the protocol and a branch in that factory.

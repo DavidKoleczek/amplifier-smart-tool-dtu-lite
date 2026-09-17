@@ -23,6 +23,11 @@ CAPABILITIES = (
         model_backed=True,
     ),
     Capability(
+        "create-profile",
+        "Write a profile from a description and the project, launch it, run checks in it, and keep it only when it passes.",
+        model_backed=True,
+    ),
+    Capability(
         "validate-profile",
         "Check a profile without launching it: Compose, `x-dtu`, the universe invariants, and realism warnings.",
         model_backed=False,
@@ -60,6 +65,11 @@ CAPABILITIES = (
     Capability(
         "destroy",
         "Remove a universe: its containers, networks, volumes, and state. Built images stay.",
+        model_backed=False,
+    ),
+    Capability(
+        "dashboard",
+        "Serve a web page listing every universe on this machine, with its URLs and a destroy button; print its URL.",
         model_backed=False,
     ),
 )
