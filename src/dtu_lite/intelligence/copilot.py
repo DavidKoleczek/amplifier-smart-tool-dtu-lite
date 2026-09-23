@@ -2,6 +2,7 @@
 
 import asyncio
 import contextlib
+import dataclasses
 from importlib.metadata import version
 import shutil
 import subprocess
@@ -16,6 +17,9 @@ from dtu_lite.schemas import DtuLiteError
 
 SUBMIT_TOOL = "submit"
 MAX_INVALID_SUBMISSIONS = 2
+# `is_terminal` arrived in github-copilot-sdk 1.0.13. Older releases keep the turn going after the submit call and
+# the loop below reads the submission when the turn ends, so the flag is an optimization, not a requirement.
+TOOL_FIELDS = {field.name for field in dataclasses.fields(Tool)}
 
 
 class CopilotIntelligence:
@@ -75,16 +79,16 @@ class CopilotIntelligence:
                 # and the caller validates before anything the agent wrote is kept.
                 session_options["available_tools"] = [*session_options["available_tools"], "edit", "write"]
         if request.output_schema is not None:
-            session_options["tools"] = [
-                Tool(
-                    name=SUBMIT_TOOL,
-                    description="Submit your final answer. Call it exactly once, when you are done.",
-                    parameters=request.output_schema,
-                    handler=capture,
-                    skip_permission=True,
-                    is_terminal=True,
-                )
-            ]
+            submit_tool: dict[str, Any] = {
+                "name": SUBMIT_TOOL,
+                "description": "Submit your final answer. Call it exactly once, when you are done.",
+                "parameters": request.output_schema,
+                "handler": capture,
+                "skip_permission": True,
+            }
+            if "is_terminal" in TOOL_FIELDS:
+                submit_tool["is_terminal"] = True
+            session_options["tools"] = [Tool(**submit_tool)]
             session_options["available_tools"] = [*session_options["available_tools"], SUBMIT_TOOL]
         deadline = time.monotonic() + request.timeout_seconds
         # Carried out of the try so the failure paths can name the session the caller could resume.

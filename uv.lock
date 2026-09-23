@@ -100,7 +100,7 @@ dev = [
 requires-dist = [
     { name = "certifi", specifier = ">=2026.7.22,<2027.0.0" },
     { name = "fastapi", specifier = ">=0.141.1,<0.142.0" },
-    { name = "github-copilot-sdk", specifier = ">=1.0.13,<2.0.0" },
+    { name = "github-copilot-sdk", specifier = ">=1.0.7,<2.0.0" },
     { name = "jsonschema", specifier = ">=4.26.0,<5.0.0" },
     { name = "pydantic", specifier = ">=2.13,<3.0" },
     { name = "python-on-whales", specifier = ">=0.81.0,<0.82.0" },
