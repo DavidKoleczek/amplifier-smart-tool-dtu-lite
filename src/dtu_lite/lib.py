@@ -17,7 +17,8 @@ from dtu_lite.core import manifest
 from dtu_lite.core import skill as skill_module
 from dtu_lite.intelligence.interface import Intelligence
 from dtu_lite.schemas import (
-    DEFAULT_INTELLIGENCE_MODEL,
+    DEFAULT_INTELLIGENCE_REASONING_EFFORT,
+    AgentProvider,
     CreatedProfile,
     Dashboard,
     Destroyed,
@@ -66,14 +67,26 @@ def check() -> HostReport:
 def install(
     apply: bool = False,
     accept_license: bool = False,
-    model: str = DEFAULT_INTELLIGENCE_MODEL,
-    reasoning_effort: ReasoningEffort = "low",
+    agent_provider: AgentProvider | None = None,
+    model: str | None = None,
+    reasoning_effort: ReasoningEffort = DEFAULT_INTELLIGENCE_REASONING_EFFORT,
     timeout_seconds: int = 1200,
     intelligence: Intelligence | None = None,
 ) -> InstallReport:
-    """Get Docker working from official docs. Model-backed unless check passes; only apply=True changes the host."""
+    """Get Docker working from official docs. Model-backed unless check passes; only apply=True changes the host.
+
+    `agent_provider` is the first installed one when omitted, and `model` that agent provider's default.
+    """
     return install_module.install(
-        check, _verify_universe, apply, accept_license, model, reasoning_effort, timeout_seconds, intelligence
+        check,
+        _verify_universe,
+        apply,
+        accept_license,
+        agent_provider,
+        model,
+        reasoning_effort,
+        timeout_seconds,
+        intelligence,
     )
 
 
@@ -100,12 +113,16 @@ def create_profile(
     keep: bool = False,
     overwrite: bool = False,
     max_attempts: int = 3,
-    model: str = DEFAULT_INTELLIGENCE_MODEL,
-    reasoning_effort: ReasoningEffort = "low",
+    agent_provider: AgentProvider | None = None,
+    model: str | None = None,
+    reasoning_effort: ReasoningEffort = DEFAULT_INTELLIGENCE_REASONING_EFFORT,
     timeout_seconds: int = 1800,
     intelligence: Intelligence | None = None,
 ) -> CreatedProfile:
-    """Write a profile from a description and prove it by launching it. Model-backed; needs Docker."""
+    """Write a profile from a description and prove it by launching it. Model-backed; needs Docker.
+
+    `agent_provider` is the first installed one when omitted, and `model` that agent provider's default.
+    """
     return create_module.create_profile(
         _universes(),
         check,
@@ -116,6 +133,7 @@ def create_profile(
         keep,
         overwrite,
         max_attempts,
+        agent_provider,
         model,
         reasoning_effort,
         timeout_seconds,

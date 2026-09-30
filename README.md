@@ -3,30 +3,44 @@
 Stands up an isolated, realistic environment from a profile on Docker Compose so software can be tested as though actually deployed. Use when passing tests on your machine is not enough evidence and code must run against real dependencies, published local repositories, and rewritten URLs without touching the host.
 
 DTU Lite is a [Smart Tool](https://github.com/microsoft/amplifier-smart-tools): a library with a thin CLI over it, whose model-backed capabilities sit behind an interface.
+They run through an agent provider, the [GitHub Copilot SDK](https://github.com/github/copilot-sdk) or [Amplifier Agent](https://github.com/microsoft/amplifier-agent).
 
 ## Installation
 
 Prerequisites:
 - [uv](https://docs.astral.sh/uv/getting-started/installation/).
 - [Docker](https://docs.docker.com/get-started/get-docker/), which every universe runs on.
-- [GitHub CLI](https://cli.github.com/) signed in to an account with a [GitHub Copilot subscription](https://github.com/github/copilot-cli#prerequisites) for the model-backed capabilities.
+- For the model-backed capabilities, one of:
+  - `copilot` agent provider: [GitHub CLI](https://cli.github.com/) signed in to an account with a [GitHub Copilot subscription](https://github.com/github/copilot-cli#prerequisites).
+  - `amplifier-agent` agent provider: the model provider's credentials, for instance `OPENAI_API_KEY` for the default `openai/...` model. See [providers](https://github.com/microsoft/amplifier-agent/blob/v1/docs/providers.md).
 
 `dtu-lite install` gets Docker working: review the plan, then use `dtu-lite install --yes` to apply it.
 
 ```bash
-uv tool install git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite
+uv tool install "dtu-lite[all] @ git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite"
 ```
 
 To use it as a library:
 
 ```bash
-uv add "dtu-lite @ git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite"
+uv add "dtu-lite[all] @ git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite"
 ```
 
 To run it once without installing:
 
 ```bash
-uvx --from git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite dtu-lite --help
+uvx --from "dtu-lite[all] @ git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite" dtu-lite --help
+```
+
+`[all]` brings both agent providers the model-backed capabilities run through. Alternatives:
+
+```bash
+# Only the GitHub Copilot agent provider
+uv tool install "dtu-lite[copilot] @ git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite"
+# Only the Amplifier Agent agent provider
+uv tool install "dtu-lite[amplifier-agent] @ git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite"
+# Deterministic capabilities only
+uv tool install git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite
 ```
 
 To teach a coding agent how to use it, install the [skill](skills/dtu-lite/SKILL.md):
@@ -65,6 +79,9 @@ dtu-lite install
 
 # Write a profile from a description and the project, and prove it by launching it (model-backed)
 dtu-lite create-profile --description "a FastAPI app on port 8000 using Postgres" --project .
+
+# The same through Amplifier Agent on another model
+dtu-lite create-profile --description "a FastAPI app on port 8000 using Postgres" --project . --agent-provider amplifier-agent --model anthropic/claude-opus-5
 
 # Launch a universe from a profile name or Compose file and wait until it is ready
 dtu-lite launch --profile <name-or-path>

@@ -10,7 +10,26 @@ import typer
 
 from dtu_lite import lib
 from dtu_lite.adapters import mcp as mcp_adapter
-from dtu_lite.schemas import DEFAULT_INTELLIGENCE_MODEL, DtuLiteError, ReasoningEffort
+from dtu_lite.schemas import (
+    DEFAULT_INTELLIGENCE_MODELS,
+    DEFAULT_INTELLIGENCE_REASONING_EFFORT,
+    AgentProvider,
+    DtuLiteError,
+    ReasoningEffort,
+)
+
+AGENT_PROVIDER_HELP = (
+    "What the model-backed work runs through: copilot (GitHub Copilot, signed in as the GitHub CLI's user) or "
+    "amplifier-agent (Amplifier Agent, with the model provider's credentials). The first installed, in that order, "
+    "when omitted."
+)
+REASONING_EFFORT_NOTE = "Applies to the copilot agent provider only."
+
+
+def _model_help(defaults: dict[AgentProvider, str]) -> str:
+    named = "; ".join(f"{agent_provider}: {model}" for agent_provider, model in defaults.items())
+    return f"A Copilot model id for copilot, <provider>/<model> for amplifier-agent. Defaults to {named}."
+
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -67,22 +86,34 @@ def install(
         bool,
         typer.Option("--accept-license", help="Explicitly accept Docker Desktop's Subscription Service Agreement."),
     ] = False,
+    agent_provider: Annotated[
+        AgentProvider | None,
+        typer.Option("--agent-provider", help=AGENT_PROVIDER_HELP),
+    ] = None,
     model: Annotated[
-        str, typer.Option(help="The intelligence model used to plan and repair.")
-    ] = DEFAULT_INTELLIGENCE_MODEL,
-    reasoning_effort: Annotated[ReasoningEffort, typer.Option(help="The model's reasoning effort.")] = "low",
+        str | None,
+        typer.Option(
+            "--model",
+            help=f"The intelligence model used to plan and repair. {_model_help(DEFAULT_INTELLIGENCE_MODELS)}",
+        ),
+    ] = None,
+    reasoning_effort: Annotated[
+        ReasoningEffort,
+        typer.Option("--reasoning-effort", help=f"The model's reasoning effort. {REASONING_EFFORT_NOTE}"),
+    ] = DEFAULT_INTELLIGENCE_REASONING_EFFORT,
     timeout_seconds: Annotated[
         int, typer.Option(min=1, help="Deadline for the whole run, including downloads and startup.")
     ] = 1200,
 ) -> None:
     """Get Docker working on this host. Model-backed: reads the official Docker docs for this platform and plans
-    the install; runs the unattended steps with --yes. Deterministic when Docker is already present.
+    the install; runs the unattended steps with --yes. Deterministic when Docker is already present. Model-backed
+    work runs through GitHub Copilot or Amplifier Agent, whichever --agent-provider names.
 
     Prints InstallReport JSON on stdout, step progress on stderr. Exits 0 on ready or installed, 1 on planned,
-    action-required or failed. Raises docs-unreachable, plan-rejected, install-timeout, or a gh preflight error
-    with the cause and remedy. Never prompts on stdin.
+    action-required or failed. Raises docs-unreachable, plan-rejected, install-timeout, or an agent provider
+    preflight error with the cause and remedy. Never prompts on stdin.
     """
-    report = lib.install(yes, accept_license, model, reasoning_effort, timeout_seconds)
+    report = lib.install(yes, accept_license, agent_provider, model, reasoning_effort, timeout_seconds)
     typer.echo(report.model_dump_json(indent=2))
     if report.outcome not in ("ready", "installed"):
         raise typer.Exit(code=1)
@@ -103,22 +134,34 @@ def create_profile(
     keep: Annotated[bool, typer.Option(help="Leave the tool's verified universe running and report it.")] = False,
     overwrite: Annotated[bool, typer.Option(help="Replace an existing profile of the same name.")] = False,
     max_attempts: Annotated[int, typer.Option(min=1, help="Submissions the tool will consider.")] = 3,
+    agent_provider: Annotated[
+        AgentProvider | None,
+        typer.Option("--agent-provider", help=AGENT_PROVIDER_HELP),
+    ] = None,
     model: Annotated[
-        str, typer.Option(help="The intelligence model that writes the profile.")
-    ] = DEFAULT_INTELLIGENCE_MODEL,
-    reasoning_effort: Annotated[ReasoningEffort, typer.Option(help="The model's reasoning effort.")] = "low",
+        str | None,
+        typer.Option(
+            "--model",
+            help=f"The intelligence model that writes the profile. {_model_help(DEFAULT_INTELLIGENCE_MODELS)}",
+        ),
+    ] = None,
+    reasoning_effort: Annotated[
+        ReasoningEffort,
+        typer.Option("--reasoning-effort", help=f"The model's reasoning effort. {REASONING_EFFORT_NOTE}"),
+    ] = DEFAULT_INTELLIGENCE_REASONING_EFFORT,
     timeout_seconds: Annotated[
         int, typer.Option(min=1, help="Deadline for the whole run; a launch with builds takes minutes.")
     ] = 1800,
 ) -> None:
-    """Write a profile under .agents/digital-twin-universe-lite/<name>/ and prove it. Model-backed: an agent reads
-    the project and Docker's docs, writes the profile, launches it, runs checks in it, and destroys it; the tool
-    then launches it again and reruns the checks, and only a profile that passes is kept.
+    """Write a profile under .agents/digital-twin-universe-lite/<name>/ and prove it. Model-backed: runs through
+    GitHub Copilot or Amplifier Agent, whichever --agent-provider names. An agent reads the project and Docker's
+    docs, writes the profile, launches it, runs checks in it, and destroys it; the tool then launches it again and
+    reruns the checks, and only a profile that passes is kept.
 
     Prints CreatedProfile JSON on stdout, one progress line per phase on stderr. Exits 0 on created or validated,
     1 on failed (the draft stays at <name>.draft/), 2 on --keep with --no-verify. Raises profile-exists,
-    project-not-found, name-invalid, profile-rejected, create-timeout, docker-unavailable, or a gh preflight
-    error with the cause and remedy.
+    project-not-found, name-invalid, profile-rejected, create-timeout, docker-unavailable, or an agent provider
+    preflight error with the cause and remedy.
     """
     if keep and no_verify:
         raise typer.BadParameter("--keep leaves a verified universe running, and --no-verify launches none.")
@@ -130,6 +173,7 @@ def create_profile(
         keep,
         overwrite,
         max_attempts,
+        agent_provider,
         model,
         reasoning_effort,
         timeout_seconds,

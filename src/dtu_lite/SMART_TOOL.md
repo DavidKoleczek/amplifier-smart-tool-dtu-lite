@@ -22,16 +22,23 @@ requires:
     install: https://docs.docker.com/get-started/get-docker/
   - name: gh
     purpose: >-
-      Generates the token that signs in to GitHub Copilot. Without it, the model-backed
-      capabilities cannot authenticate.
+      Generates the token that signs in to GitHub Copilot, for the copilot agent provider.
+      Without it, the model-backed capabilities cannot authenticate through copilot.
     optional: true
     install: https://cli.github.com/
   - name: github-copilot-subscription
     purpose: >-
       A Copilot subscription on the account signed in to gh powers the model-backed
-      capabilities. Without it, only the deterministic capabilities run.
+      capabilities, for the copilot agent provider.
     optional: true
     install: https://github.com/github/copilot-cli#prerequisites
+  - name: amplifier-agent-provider-credentials
+    purpose: >-
+      The credentials of the model provider the amplifier-agent agent provider calls, for
+      instance OPENAI_API_KEY for its default model. Without them, the model-backed
+      capabilities cannot run through amplifier-agent. See the full list of options at the install link.
+    optional: true
+    install: https://github.com/microsoft/amplifier-agent/blob/v1/docs/providers.md
 ---
 
 Stands up an isolated, realistic environment from a profile on Docker Compose so software can be cloned, installed, run, and experienced like a real user would, without touching the host. Use when passing tests on your machine is not enough evidence and code must be exercised as though actually deployed.
@@ -113,13 +120,24 @@ write from the examples, `validate-profile` and `launch` are enough.
 
 ```bash
 # as a CLI
-uv tool install git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite
+uv tool install "dtu-lite[all] @ git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite"
 
 # as a library, from another project
-uv add "dtu-lite @ git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite"
+uv add "dtu-lite[all] @ git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite"
 
 # once, without installing
-uvx --from git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite dtu-lite --help
+uvx --from "dtu-lite[all] @ git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite" dtu-lite --help
+```
+
+`[all]` brings both agent providers the model-backed capabilities run through. Alternatives:
+
+```bash
+# Only the GitHub Copilot agent provider
+uv tool install "dtu-lite[copilot] @ git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite"
+# Only the Amplifier Agent agent provider
+uv tool install "dtu-lite[amplifier-agent] @ git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite"
+# Deterministic capabilities only
+uv tool install git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite
 ```
 
 Verify with `dtu-lite manifest`, which needs no credentials. To upgrade, run
@@ -144,11 +162,19 @@ only `ready` and `installed` exit 0, and `installed` means a universe was launch
 new Docker, not just that `check` passes. Follow its single `next` instruction when manual action
 remains. No step prompts on stdin. Partial installation is reported, not rolled back.
 
-Deterministic capabilities need only `uv` and Docker. Model-backed capabilities run through GitHub
-Copilot, signed in as the GitHub CLI's user: `gh` must be installed and `gh auth login`
-completed with an account that has a Copilot subscription. Without that, a model-backed
-capability fails immediately and names what to configure; it never falls back to a
-deterministic answer.
+Deterministic capabilities need only `uv` and Docker. Model-backed capabilities run through an agent
+provider, picked with `--agent-provider`, or the first installed of `copilot` and
+`amplifier-agent` when omitted:
+
+- `copilot`: GitHub Copilot, signed in as the GitHub CLI's user. `gh` must be installed and
+  `gh auth login` completed with an account that has a Copilot subscription.
+- `amplifier-agent`: [Amplifier Agent](https://github.com/microsoft/amplifier-agent), calling
+  the model provider named in `--model <provider>/<model>` with that provider's credentials,
+  for instance `OPENAI_API_KEY` for the default `openai/...` model. See its
+  [providers](https://github.com/microsoft/amplifier-agent/blob/v1/docs/providers.md).
+
+Without an agent provider installed and configured, a model-backed capability fails immediately
+and names what to install or configure; it never falls back to a deterministic answer.
 
 Runs on Linux, macOS, and Windows. The twin is a Linux container everywhere by default; on
 Windows a profile can opt into Windows containers.
@@ -156,7 +182,8 @@ Windows a profile can opt into Windows containers.
 ## Straight and smart paths
 
 Deterministic capabilities run with no provider configured. Model-backed capabilities go
-through GitHub Copilot, signed in as the GitHub CLI's user, and say so in their help text.
+through GitHub Copilot or Amplifier Agent, whichever `--agent-provider` names, and say so in
+their help text.
 
 ## Output and failure contract
 

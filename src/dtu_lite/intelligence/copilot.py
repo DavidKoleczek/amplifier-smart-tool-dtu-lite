@@ -10,13 +10,11 @@ import time
 from typing import Any
 
 from copilot import CopilotClient, PermissionHandler, Tool, ToolInvocation, ToolResult
-import jsonschema
 
 from dtu_lite.intelligence.schemas import AgentRequest, AgentResult
+from dtu_lite.intelligence.submission import MAX_INVALID_SUBMISSIONS, SUBMIT_TOOL, resubmit_prompt, submission_problem
 from dtu_lite.schemas import DtuLiteError
 
-SUBMIT_TOOL = "submit"
-MAX_INVALID_SUBMISSIONS = 2
 # `is_terminal` arrived in github-copilot-sdk 1.0.13. Older releases keep the turn going after the submit call and
 # the loop below reads the submission when the turn ends, so the flag is an optimization, not a requirement.
 TOOL_FIELDS = {field.name for field in dataclasses.fields(Tool)}
@@ -117,7 +115,7 @@ class CopilotIntelligence:
                 text = str(getattr(event.data, "content", "") or "") if event is not None else ""
                 if request.output_schema is None:
                     return AgentResult(text=text, session_id=session_id)
-                problem = _submission_problem(submitted, request.output_schema)
+                problem = submission_problem(submitted, request.output_schema)
                 if problem is None:
                     return AgentResult(output=submitted, text=text, session_id=session_id)
                 if invalid >= MAX_INVALID_SUBMISSIONS:
@@ -128,10 +126,7 @@ class CopilotIntelligence:
                     )
                 invalid += 1
                 submitted = None
-                prompt = (
-                    f"Your answer was not accepted: {problem}. "
-                    f"Call the {SUBMIT_TOOL} tool now with an answer matching its schema."
-                )
+                prompt = resubmit_prompt(problem)
         except TimeoutError:
             return AgentResult(
                 error=f"The agent did not finish within {request.timeout_seconds} seconds.", session_id=session_id
@@ -141,13 +136,3 @@ class CopilotIntelligence:
         finally:
             with contextlib.suppress(Exception):
                 await client.stop()
-
-
-def _submission_problem(submitted: dict[str, Any] | None, schema: dict[str, Any]) -> str | None:
-    if submitted is None:
-        return f"the {SUBMIT_TOOL} tool was never called"
-    try:
-        jsonschema.validate(submitted, schema)
-    except jsonschema.ValidationError as error:
-        return f"the submission does not match the schema ({error.message})"
-    return None

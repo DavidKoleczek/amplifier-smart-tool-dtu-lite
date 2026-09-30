@@ -7,7 +7,7 @@ This is a Smart Tool that must conform to Microsoft's [Amplifier Smart Tool Spec
 - `docs/00-vision.md` is the source of truth for what this tool is and is not, and `docs/01-library.md` for what it exposes. Then `README.md` and `CONTRIBUTING.md`, then the rest of `docs/`. Both are written for people and stay concise. When work changes any of them, propose the doc updates at the end and call out contradictions.
 - The library is the tool. Every capability lives in the library and is reachable from `lib.py`. The CLI and any other surface are thin wrappers: argument parsing and I/O conventions, then a call into the library. Capability that exists only in a wrapper is a defect.
 - Each domain capability lives in `capabilities/<name>/`, with its prompts and templates beside its code. `lib.py` imports it and is the only place that does. `core/` holds only what every smart tool has: the manifest and the skill.
-- Deterministic capabilities run with no model provider configured. Model-backed capabilities go through the `Intelligence` interface, never an SDK directly, and their help text says they are model-backed. They default to `DEFAULT_INTELLIGENCE_MODEL` and `low` reasoning effort from `schemas.py` and expose both as parameters; never hardcode a model name.
+- Deterministic capabilities run with no model provider configured. Model-backed capabilities go through the `Intelligence` interface, never an SDK directly, and their help text says they are model-backed. They run through the agent provider `agent_provider` names, or the first installed, and default to that agent provider's model in `DEFAULT_INTELLIGENCE_MODELS` and `DEFAULT_INTELLIGENCE_REASONING_EFFORT` from `schemas.py`, exposing all three as parameters; never hardcode a model name.
 - Failures name what went wrong and how to fix it. The caller is usually an agent.
 - Once this tool has a remote, declare it in `pyproject.toml` under `[project.urls]` as `Repository = "<url>"`. `--help` then carries it, so an agent that can run the tool but not read its files still finds the docs.
 - Never modify this file unless explictly told.
@@ -57,6 +57,7 @@ The repositories are (add to the list as more are needed, the one exception to m
 
 - https://github.com/microsoft/amplifier-smart-tools
 - https://github.com/github/copilot-sdk
+- https://github.com/microsoft/amplifier-agent
 - https://github.com/agentskills/agentskills
 - https://github.com/microsoft/amplifier-bundle-digital-twin-universe
 - https://github.com/microsoft/amplifier-bundle-gitea

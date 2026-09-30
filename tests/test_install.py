@@ -20,9 +20,11 @@ from dtu_lite import lib
 from dtu_lite.capabilities.install import docs, facts, run
 from dtu_lite.capabilities.install import install as install_module
 from dtu_lite.cli import app
+from dtu_lite.intelligence import interface
 from dtu_lite.intelligence.schemas import AgentRequest, AgentResult
 from dtu_lite.schemas import (
     DEFAULT_INTELLIGENCE_MODEL,
+    DEFAULT_INTELLIGENCE_MODELS,
     DtuLiteError,
     ExecResult,
     HostReport,
@@ -174,7 +176,8 @@ def harness(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Harness:
     )
     harness = Harness(host)
     monkeypatch.setattr(install_module, "PLAN_PATH", tmp_path / "install" / "plan.json")
-    monkeypatch.setattr(install_module, "default_intelligence", lambda: harness.agent)
+    monkeypatch.setattr(interface, "installed", lambda agent_provider: True)
+    monkeypatch.setattr(interface, "resolve_intelligence", lambda agent_provider, model: harness.agent)
     monkeypatch.setattr(lib, "check", harness.check)
     monkeypatch.setattr(lib, "_verify_universe", harness.verify)
     monkeypatch.setattr(facts, "host_facts", harness.gather)
@@ -185,7 +188,7 @@ def harness(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Harness:
 
 def test_ready_never_calls_preflight_fetch_or_runner(harness: Harness, monkeypatch: pytest.MonkeyPatch) -> None:
     harness.checks = [host_report(True)]
-    monkeypatch.setattr(install_module, "default_intelligence", lambda: pytest.fail("intelligence loaded"))
+    monkeypatch.setattr(interface, "resolve_intelligence", lambda agent_provider, model: pytest.fail("loaded"))
 
     report = lib.install(apply=True)
 
@@ -200,7 +203,7 @@ def test_ready_never_calls_preflight_fetch_or_runner(harness: Harness, monkeypat
 
 
 def test_planned_is_tool_free_structured_and_runs_nothing(harness: Harness) -> None:
-    report = lib.install(intelligence=harness.agent, model=DEFAULT_INTELLIGENCE_MODEL, reasoning_effort="high")
+    report = lib.install(intelligence=harness.agent, model=DEFAULT_INTELLIGENCE_MODEL, reasoning_effort="medium")
 
     assert report.outcome == "planned"
     assert report.next == "rerun with --yes"
@@ -211,7 +214,7 @@ def test_planned_is_tool_free_structured_and_runs_nothing(harness: Harness) -> N
     assert not request.writable
     assert request.output_schema == InstallPlan.model_json_schema()
     assert request.model == DEFAULT_INTELLIGENCE_MODEL
-    assert request.reasoning_effort == "high"
+    assert request.reasoning_effort == "medium"
     assert '"VERSION_CODENAME": "noble"' in request.prompt
     assert fixture_pages(harness.host)[UBUNTU] in request.prompt
     assert "accept_license is false" in request.prompt
@@ -410,6 +413,38 @@ def test_cached_plan_failure_resumes_original_session(harness: Harness) -> None:
     assert fixture_pages(harness.host)[UBUNTU] in harness.agent.requests[-1].prompt
 
 
+def test_saved_plan_records_the_agent_provider_and_its_default_model(harness: Harness) -> None:
+    lib.install(agent_provider="amplifier-agent")
+
+    assert harness.agent.requests[0].model == DEFAULT_INTELLIGENCE_MODELS["amplifier-agent"]
+    with install_module.PLAN_PATH.open(encoding="utf-8") as file:
+        assert json.load(file)["agent_provider"] == "amplifier-agent"
+
+
+def test_saved_plan_from_another_agent_provider_is_reused_without_its_session(harness: Harness) -> None:
+    planned = lib.install(agent_provider="copilot")
+    harness.runner.results = [ExecResult(exit_code=1, stdout="", stderr="cached command failed")]
+
+    report = lib.install(apply=True, agent_provider="amplifier-agent")
+
+    assert [value.commands for value in report.steps] == [value.commands for value in planned.steps]
+    assert report.outcome == "failed"
+    assert len(harness.agent.requests) == 1
+    assert "another agent provider" in report.notes[-1]
+
+
+def test_saved_plan_from_the_same_agent_provider_resumes_its_session(harness: Harness) -> None:
+    lib.install(agent_provider="amplifier-agent")
+    harness.agent.plans(plan([step("repair")]))
+    harness.runner.results = [ExecResult(exit_code=1, stdout="", stderr="cached command failed")]
+    harness.checks = [host_report(), host_report(True)]
+
+    report = lib.install(apply=True, agent_provider="amplifier-agent")
+
+    assert report.outcome == "installed"
+    assert harness.agent.requests[-1].resume == "session-1"
+
+
 @pytest.mark.parametrize("change", ["facts", "license"])
 def test_changed_facts_or_consent_replaces_saved_plan(harness: Harness, change: str) -> None:
     lib.install(intelligence=harness.agent)
@@ -483,17 +518,19 @@ def test_cli_json_and_exit_by_outcome(
             "install",
             "--yes",
             "--accept-license",
+            "--agent-provider",
+            "amplifier-agent",
             "--model",
-            DEFAULT_INTELLIGENCE_MODEL,
+            DEFAULT_INTELLIGENCE_MODELS["amplifier-agent"],
             "--reasoning-effort",
-            "high",
+            "medium",
             "--timeout-seconds",
             "50",
         ],
     )
     assert result.exit_code == exit_code
     assert json.loads(result.stdout)["outcome"] == outcome
-    assert calls == [(True, True, DEFAULT_INTELLIGENCE_MODEL, "high", 50)]
+    assert calls == [(True, True, "amplifier-agent", DEFAULT_INTELLIGENCE_MODELS["amplifier-agent"], "medium", 50)]
 
 
 def test_cli_progress_does_not_pollute_json(harness: Harness) -> None:

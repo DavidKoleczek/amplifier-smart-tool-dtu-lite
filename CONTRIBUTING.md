@@ -9,9 +9,10 @@ Install:
 - [Git](https://git-scm.com/)
 - [uv](https://docs.astral.sh/uv/getting-started/installation/): Manages Python environments
 - [prek](https://github.com/j178/prek): Used for precommit hooks. Recommended to install through PyPI/uv with `uv tool install prek`. Use `uv tool upgrade prek` to update it.
-- [GitHub CLI](https://cli.github.com/) for intelligence features with GitHub Copilot.
+- [GitHub CLI](https://cli.github.com/) for intelligence features through the `copilot` agent provider.
 - [Node.js](https://nodejs.org/) 22+ and [pnpm](https://pnpm.io/installation), optional: only to change the dashboard's frontend. The compiled dashboard is committed, so running it needs neither.
-- [GitHub Copilot subscription](https://github.com/github/copilot-cli#prerequisites) for intelligent features.
+- [GitHub Copilot subscription](https://github.com/github/copilot-cli#prerequisites) for intelligent features through the `copilot` agent provider.
+- [Model provider credentials](https://github.com/microsoft/amplifier-agent/blob/v1/docs/providers.md), such as `OPENAI_API_KEY`, for intelligent features through the `amplifier-agent` agent provider.
 
 ### Initial Setup
 
@@ -94,6 +95,15 @@ uv run pytest -n0 tests/test_live_universe.py -k round_trip -s
 ```
 
 Each worker hands out host ports from its own range (`free_port` in `tests/conftest.py`), so parallel launches never collide on a port.
+
+Run the deterministic capabilities on an install without either agent provider, then restore the full environment:
+
+```bash
+uv sync --no-extra copilot --no-extra amplifier-agent
+uv run dtu-lite manifest
+uv run pytest -m "not model and not live"
+uv sync --all-extras --all-groups
+```
 
 #### Dashboard Development
 

@@ -12,6 +12,7 @@ REFERENCE_ROOT = Path(__file__).parent / "reference"
 REFERENCES = {
     "amplifier-smart-tools": "https://github.com/microsoft/amplifier-smart-tools",
     "copilot-sdk": "https://github.com/github/copilot-sdk",
+    "amplifier-agent": "https://github.com/microsoft/amplifier-agent",
     "agentskills": "https://github.com/agentskills/agentskills",
     "amplifier-bundle-digital-twin-universe": "https://github.com/microsoft/amplifier-bundle-digital-twin-universe",
     "amplifier-bundle-gitea": "https://github.com/microsoft/amplifier-bundle-gitea",

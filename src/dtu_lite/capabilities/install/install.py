@@ -15,10 +15,12 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from dtu_lite.capabilities.install import docs, facts, run
-from dtu_lite.intelligence.interface import Intelligence, default_intelligence
+from dtu_lite.intelligence.interface import Intelligence, resolve_agent_provider, select_intelligence
 from dtu_lite.intelligence.schemas import AgentRequest
 from dtu_lite.schemas import (
-    DEFAULT_INTELLIGENCE_MODEL,
+    DEFAULT_INTELLIGENCE_MODELS,
+    DEFAULT_INTELLIGENCE_REASONING_EFFORT,
+    AgentProvider,
     DtuLiteError,
     HostReport,
     InstallPlan,
@@ -41,6 +43,8 @@ class SavedPlan(BaseModel):
     plan: InstallPlan
     docs: list[str]
     session_id: str | None
+    # A session only resumes through the agent provider that holds it; None for an injected intelligence.
+    agent_provider: AgentProvider | None = None
 
 
 @dataclass
@@ -187,8 +191,9 @@ def install(
     verify: Callable[[], None],
     apply: bool = False,
     accept_license: bool = False,
-    model: str = DEFAULT_INTELLIGENCE_MODEL,
-    reasoning_effort: ReasoningEffort = "low",
+    agent_provider: AgentProvider | None = None,
+    model: str | None = None,
+    reasoning_effort: ReasoningEffort = DEFAULT_INTELLIGENCE_REASONING_EFFORT,
     timeout_seconds: int = 1200,
     intelligence: Intelligence | None = None,
 ) -> InstallReport:
@@ -210,17 +215,24 @@ def install(
             return report
         runner = facts.SubprocessRunner()
         host = facts.host_facts(docker, accept_license, runner, deadline)
-        agent = intelligence if intelligence is not None else default_intelligence()
+        if intelligence is None:
+            agent_provider = resolve_agent_provider(agent_provider)
+        agent, model = select_intelligence(intelligence, agent_provider, model, DEFAULT_INTELLIGENCE_MODELS)
         agent.preflight()
         saved = read_plan(host) if apply else None
         pages = docs.fetch_docs(host, deadline)
-        session = PlanningSession(
-            host, pages, agent, model, reasoning_effort, deadline, saved.session_id if saved else None
-        )
+        resume = saved.session_id if saved and saved.agent_provider == agent_provider else None
+        session = PlanningSession(host, pages, agent, model, reasoning_effort, deadline, resume)
         plan = saved.plan if saved else session.plan()
         if saved is None:
             save_plan(
-                SavedPlan(facts_hash=facts_hash(host), plan=plan, docs=list(pages), session_id=session.session_id)
+                SavedPlan(
+                    facts_hash=facts_hash(host),
+                    plan=plan,
+                    docs=list(pages),
+                    session_id=session.session_id,
+                    agent_provider=agent_provider,
+                )
             )
         report.summary = plan.summary
         report.method = plan.method
@@ -278,7 +290,8 @@ def _apply(
                 report.next = "read the failed step's reason and follow its source page before retrying"
                 if session.session_id is None:
                     report.notes.append(
-                        "The intelligence returned no session_id, so the failing session cannot be resumed."
+                        "No planning session to resume for a repair: the intelligence returned no session_id, "
+                        "or the saved plan was made through another agent provider."
                     )
                 return
             repaired = True

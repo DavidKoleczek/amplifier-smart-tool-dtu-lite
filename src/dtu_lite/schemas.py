@@ -4,8 +4,17 @@ from typing import Literal, NamedTuple
 
 from pydantic import BaseModel, ConfigDict, Field
 
-DEFAULT_INTELLIGENCE_MODEL = "gpt-6-astra"
 ReasoningEffort = Literal["low", "medium", "high", "xhigh", "max"]
+AgentProvider = Literal["copilot", "amplifier-agent"]
+# Also the order an agent provider is picked in when none is named.
+AGENT_PROVIDERS: tuple[AgentProvider, ...] = ("copilot", "amplifier-agent")
+
+DEFAULT_INTELLIGENCE_MODEL = "gpt-6.1-sol"
+DEFAULT_INTELLIGENCE_MODELS: dict[AgentProvider, str] = {
+    "copilot": DEFAULT_INTELLIGENCE_MODEL,
+    "amplifier-agent": "openai/gpt-6.1-sol",
+}
+DEFAULT_INTELLIGENCE_REASONING_EFFORT: ReasoningEffort = "high"
 
 SEMVER_PATTERN = r"^\d+\.\d+\.\d+$"
 SLUG_PATTERN = r"^[a-z0-9]+(-[a-z0-9]+)*$"

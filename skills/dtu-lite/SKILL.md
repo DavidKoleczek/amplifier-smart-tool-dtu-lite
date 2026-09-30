@@ -17,13 +17,24 @@ Stands up an isolated, realistic environment from a profile on Docker Compose so
 
 ```bash
 # as a CLI
-uv tool install git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite
+uv tool install "dtu-lite[all] @ git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite"
 
 # as a library, from another project
-uv add "dtu-lite @ git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite"
+uv add "dtu-lite[all] @ git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite"
 
 # once, without installing
-uvx --from git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite dtu-lite --help
+uvx --from "dtu-lite[all] @ git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite" dtu-lite --help
+```
+
+`[all]` brings both agent providers the model-backed capabilities run through. Alternatives:
+
+```bash
+# Only the GitHub Copilot agent provider
+uv tool install "dtu-lite[copilot] @ git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite"
+# Only the Amplifier Agent agent provider
+uv tool install "dtu-lite[amplifier-agent] @ git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite"
+# Deterministic capabilities only
+uv tool install git+https://github.com/DavidKoleczek/amplifier-smart-tool-dtu-lite
 ```
 
 Verify with `dtu-lite manifest`, which needs no credentials. The repository is private, so these commands need git access to it.

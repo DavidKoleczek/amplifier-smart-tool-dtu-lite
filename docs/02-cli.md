@@ -34,7 +34,8 @@ dtu-lite check
 ## dtu-lite install
 
 ```bash
-dtu-lite install [--yes] [--accept-license] [--model ...] [--reasoning-effort low] [--timeout-seconds 1200]
+dtu-lite install [--yes] [--accept-license] [--agent-provider copilot|amplifier-agent] [--model MODEL]
+                 [--reasoning-effort low] [--timeout-seconds 1200]
 ```
 
 `lib.install()`, with `--yes` as `apply=True`, printed as JSON. One progress line per step goes to stderr while `--yes` runs, so a person watching a long download knows it is alive. Exits 0 on `ready` or `installed` and 1 otherwise, so `dtu-lite install --yes && dtu-lite launch ...` behaves like `check`.
@@ -43,7 +44,8 @@ dtu-lite install [--yes] [--accept-license] [--model ...] [--reasoning-effort lo
 
 ```bash
 dtu-lite create-profile --description "a FastAPI app on port 8000 using Postgres" [--project .] [--name web-app]
-                        [--no-verify] [--keep] [--overwrite] [--max-attempts 3] [--model ...]
+                        [--no-verify] [--keep] [--overwrite] [--max-attempts 3]
+                        [--agent-provider copilot|amplifier-agent] [--model MODEL]
                         [--reasoning-effort low] [--timeout-seconds 1800]
 ```
 

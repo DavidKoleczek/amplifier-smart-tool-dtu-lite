@@ -50,8 +50,9 @@ Get Docker working on this host. Model-backed, except that when `check()` alread
 def install(
     apply: bool = False,            # run the unattended steps; otherwise only plan
     accept_license: bool = False,   # allow --accept-license in Docker Desktop's installer
-    model: str = DEFAULT_INTELLIGENCE_MODEL,
-    reasoning_effort: ReasoningEffort = "low",
+    agent_provider: AgentProvider | None = None,  # copilot or amplifier-agent; the first installed when None
+    model: str | None = None,       # the agent provider's default in DEFAULT_INTELLIGENCE_MODELS when None
+    reasoning_effort: ReasoningEffort = DEFAULT_INTELLIGENCE_REASONING_EFFORT,
     timeout_seconds: int = 1200,    # the whole run; Desktop downloads are large and daemon start is polled
     intelligence: Intelligence | None = None,
 ) -> InstallReport
@@ -60,7 +61,7 @@ def install(
 Host facts are gathered deterministically, the official Docker pages for this platform and distribution are fetched as Markdown at run time, and the agent, given no tools, turns both into one `InstallPlan`: ordered steps, each with its commands, the page it came from, and whether it can run unattended.
 The tool checks the plan before showing it: every step cites a supplied page, `--accept-license` appears only with `accept_license`, and no unattended step uses `sudo` without `-n`, a convenience script, or anything that needs a new login or a restart.
 
-Without `apply`, the plan is the result and is saved at `~/.dtu-lite/install/plan.json` with a hash of the facts. `apply=True` reuses it while the facts still match, so what runs is what was shown and the two calls cost one model call. It then runs the unattended steps in order with stdin closed, stops at the first manual step, and on a failing step resumes the same agent session once for replacement steps.
+Without `apply`, the plan is the result and is saved at `~/.dtu-lite/install/plan.json` with a hash of the facts and the agent provider it was made through. `apply=True` reuses it while the facts still match, so what runs is what was shown and the two calls cost one model call. It then runs the unattended steps in order with stdin closed, stops at the first manual step, and on a failing step resumes the same agent session once for replacement steps. A plan made through another agent provider is still reused, but its session is not, so a failing step ends the run without a repair round.
 When `check()` passes afterwards, it launches the shipped `hello` example, runs a command in it, and destroys it, and only then reports `installed`.
 
 ```
@@ -73,7 +74,7 @@ failed           apply; a step failed after the repair round, or the universe di
 
 Every step in `InstallReport.steps` keeps its status and, when it failed, the last lines of its output in `reason`. `next` is exactly one instruction for the person. `notes` carries what the plan wants said: license terms, deviations from the docs such as `-y`, the docker group's privileges.
 
-Raises `docs-unreachable` (with the pages to read by hand), `plan-rejected`, `install-timeout` (with the report so far), and the intelligence preflight codes `gh-missing` and `gh-not-signed-in`.
+Raises `docs-unreachable` (with the pages to read by hand), `plan-rejected`, `install-timeout` (with the report so far), `no-agent-provider` and `agent-provider-not-installed` (with the command that installs one), and the intelligence preflight codes: `gh-missing` and `gh-not-signed-in` for `copilot`, `model-invalid` and `amplifier-agent-unavailable` for `amplifier-agent`.
 
 ## Create profile
 
@@ -88,14 +89,15 @@ def create_profile(
     keep: bool = False,                      # leave the tool's verified universe running and report it; needs verify
     overwrite: bool = False,                 # replace an existing <name>/
     max_attempts: int = 3,                   # submissions the tool will consider; the agent iterates within each
-    model: str = DEFAULT_INTELLIGENCE_MODEL,
-    reasoning_effort: ReasoningEffort = "low",
+    agent_provider: AgentProvider | None = None,  # copilot or amplifier-agent; the first installed when None
+    model: str | None = None,                # the agent provider's default in DEFAULT_INTELLIGENCE_MODELS when None
+    reasoning_effort: ReasoningEffort = DEFAULT_INTELLIGENCE_REASONING_EFFORT,
     timeout_seconds: int = 1800,             # the whole run; a launch with builds is minutes
     intelligence: Intelligence | None = None,
 ) -> CreatedProfile
 ```
 
-The agent has tools and the tool has the verdict. The agent works in the project root (the git root above `project`, or `project` itself, or the working directory without one) with `view`, `grep`, `bash`, `edit`, and `write`, reading the repository and a local clone of Docker's documentation, and writing only into `<name>.draft/` beside where the profile will land. It must validate, launch, run every check in the twin, and destroy on its own before submitting, and the submission is accepted only when it carries the id of a universe the tool saw appear during the run and a passed result for every check; anything less is sent back once as a correction, then `profile-rejected`. The tool then validates, launches, reruns the same checks through `execute`, and destroys. Only a draft that passes for the tool is renamed to `<name>/`.
+The agent has tools and the tool has the verdict. The agent works in the project root (the git root above `project`, or `project` itself, or the working directory without one) with tools to read, search, and write files and run commands, reading the repository and a local clone of Docker's documentation, and writing only into `<name>.draft/` beside where the profile will land. It must validate, launch, run every check in the twin, and destroy on its own before submitting, and the submission is accepted only when it carries the id of a universe the tool saw appear during the run and a passed result for every check; anything less is sent back once as a correction, then `profile-rejected`. The tool then validates, launches, reruns the same checks through `execute`, and destroys. Only a draft that passes for the tool is renamed to `<name>/`.
 
 After the tool's verdict, one more turn in the same session asks the agent to clean up: destroy anything it launched that is still listed, remove scratch it made outside the draft, and take out of the profile anything that was there only for iteration. When that edits the profile, or the draft's files differ afterwards whatever the agent said, the tool validates and launches once more before promoting.
 
@@ -323,9 +325,14 @@ class Intelligence(Protocol):
 `preflight` raises `DtuLiteError` naming what to configure when the implementation cannot run.
 `run` executes one agent: `AgentRequest` holds the prompt, model, optional workspace, and optional output schema; `AgentResult` holds the text, structured output, or error.
 Setting `AgentRequest.resume` to an earlier `AgentResult.session_id` continues that session instead of starting a fresh one, so the agent keeps what it learned.
-A request with a `workspace` gives the agent `view`, `grep`, and `bash` in that directory on this host, and `edit` and `write` too when `writable`. `bash` is not sandboxed to the workspace: what bounds the agent is the caller's prompt, and the caller validates everything the agent produced before any of it is kept, the way `create_profile` checks that every file lies in the draft and launches the draft itself.
+A request with a `workspace` gives the agent tools to read and search files and run commands in that directory on this host, and to write files too when `writable`: `view`, `grep`, and `bash`, plus `edit` and `write`, on `copilot`; `read_file`, `glob`, `grep`, and `bash`, plus `write_file` and `edit_file`, on `amplifier-agent`. `bash` is not sandboxed to the workspace: what bounds the agent is the caller's prompt, and the caller validates everything the agent produced before any of it is kept, the way `create_profile` checks that every file lies in the draft and launches the draft itself.
 
-`default_intelligence()` returns the shipped implementation, `CopilotIntelligence`, built on the [GitHub Copilot SDK](https://github.com/github/copilot-sdk) and signed in through the GitHub CLI.
+`resolve_intelligence(agent_provider)` returns a shipped implementation, one per agent provider, each installed through the extra of the same name:
+
+- `copilot`: `CopilotIntelligence`, built on the [GitHub Copilot SDK](https://github.com/github/copilot-sdk) and signed in through the GitHub CLI.
+- `amplifier-agent`: `AmplifierAgentIntelligence`, built on [Amplifier Agent](https://github.com/microsoft/amplifier-agent). The model is `<provider>/<model>`, and `reasoning_effort` is ignored. Sessions live under the platform's per-user state directory, in `dtu-lite/amplifier-agent`.
+
+Without an agent provider named, the first installed in that order is used; one that is not installed raises `DtuLiteError` with the command that installs it.
 Another implementation is a module satisfying the protocol and a branch in that factory.
 
 ## Manifest and skill
@@ -340,4 +347,4 @@ Another implementation is a module satisfying the protocol and a branch in that 
 
 A capability's code goes in `dtu_lite/capabilities/<name>/`, with its prompts and templates beside it, and `lib.py` gets a facade function that imports it and is the only caller of it.
 Each capability of the library gets a section here: what it does and when to reach for it, the signature `lib.py` exposes, what each argument means, and what it returns or raises. Name the result class; describe a field only when its name does not say enough.
-Model-backed capabilities say so, and take `model` and `reasoning_effort`, defaulting to `DEFAULT_INTELLIGENCE_MODEL` and `low` from `dtu_lite.schemas`.
+Model-backed capabilities say so, and take `agent_provider`, `model`, and `reasoning_effort`, defaulting to the first installed agent provider, its model in `DEFAULT_INTELLIGENCE_MODELS`, and `DEFAULT_INTELLIGENCE_REASONING_EFFORT` from `dtu_lite.schemas`.

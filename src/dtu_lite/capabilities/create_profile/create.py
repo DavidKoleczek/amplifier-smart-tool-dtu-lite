@@ -1,7 +1,7 @@
 """Create profile: an agent with tools writes a profile and proves it; the tool proves it again and keeps what survives.
 
-The agent works in the project with `view`, `grep`, `bash`, `edit`, and `write`, writing only into a draft
-directory. It must validate, launch, check, and destroy on its own before submitting, and the submission has to
+The agent works in the project with tools to read, search, and write files and run commands, writing only into a
+draft directory. It must validate, launch, check, and destroy on its own before submitting, and the submission has to
 carry the evidence. The tool does not believe it: it validates, launches, reruns the checks, and destroys, and only
 a draft that passes is renamed into place. Failed attempts cost the agent's launches; the tool never launches a
 draft the agent has not already launched and checked.
@@ -30,11 +30,13 @@ from dtu_lite.capabilities.create_profile import reference as reference_module
 from dtu_lite.capabilities.install.facts import SubprocessRunner, remaining
 from dtu_lite.capabilities.universe.profile import PROFILE_DIRECTORY
 from dtu_lite.core.skill import skill_directory
-from dtu_lite.intelligence.interface import Intelligence, default_intelligence
+from dtu_lite.intelligence.interface import Intelligence, select_intelligence
 from dtu_lite.intelligence.schemas import AgentRequest, HostWorkspace
 from dtu_lite.schemas import (
-    DEFAULT_INTELLIGENCE_MODEL,
+    DEFAULT_INTELLIGENCE_MODELS,
+    DEFAULT_INTELLIGENCE_REASONING_EFFORT,
     SLUG_PATTERN,
+    AgentProvider,
     Check,
     Cleanup,
     CreatedProfile,
@@ -306,8 +308,9 @@ def create_profile(
     keep: bool = False,
     overwrite: bool = False,
     max_attempts: int = 3,
-    model: str = DEFAULT_INTELLIGENCE_MODEL,
-    reasoning_effort: ReasoningEffort = "low",
+    agent_provider: AgentProvider | None = None,
+    model: str | None = None,
+    reasoning_effort: ReasoningEffort = DEFAULT_INTELLIGENCE_REASONING_EFFORT,
     timeout_seconds: int = 1800,
     intelligence: Intelligence | None = None,
 ) -> CreatedProfile:
@@ -347,7 +350,7 @@ def create_profile(
             f"{final} already exists.",
             f"Pass overwrite=True to replace it, or choose another name; `dtu-lite launch --profile {profile_name}` runs it as is.",
         )
-    agent = intelligence if intelligence is not None else default_intelligence()
+    agent, model = select_intelligence(intelligence, agent_provider, model, DEFAULT_INTELLIGENCE_MODELS)
     agent.preflight()
     shutil.rmtree(draft, ignore_errors=True)
     draft.mkdir(parents=True)

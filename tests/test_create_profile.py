@@ -23,9 +23,11 @@ from dtu_lite.capabilities.universe import state
 from dtu_lite.capabilities.universe.profile import EXAMPLES_DIRECTORY, XDtu
 from dtu_lite.capabilities.universe.state import UniverseRecord
 from dtu_lite.cli import app
+from dtu_lite.intelligence import interface
 from dtu_lite.intelligence.schemas import AgentRequest, AgentResult
 from dtu_lite.schemas import (
-    DEFAULT_INTELLIGENCE_MODEL,
+    DEFAULT_INTELLIGENCE_MODELS,
+    DEFAULT_INTELLIGENCE_REASONING_EFFORT,
     Check,
     CheckStatus,
     Cleanup,
@@ -243,7 +245,7 @@ def harness(state_root: Path, make_repository: MakeRepository, monkeypatch: pyte
 def test_validate_only_promotes_without_launching(harness: Harness) -> None:
     agent = FakeIntelligence([harness.author(universe_id=None, checks=[check(status="pending")])])
 
-    result = harness.create(agent, verify=False, reasoning_effort="high")
+    result = harness.create(agent, verify=False)
 
     assert result.outcome == "validated"
     assert result.path == harness.final
@@ -261,7 +263,8 @@ def test_validate_only_promotes_without_launching(harness: Harness) -> None:
     assert request.workspace.path == harness.project.resolve()
     assert request.writable
     assert request.output_schema == ProfileDraft.model_json_schema()
-    assert request.reasoning_effort == "high"
+    assert request.model == DEFAULT_INTELLIGENCE_MODELS["copilot"]
+    assert request.reasoning_effort == DEFAULT_INTELLIGENCE_REASONING_EFFORT
     assert "Stop there: do not launch" in request.prompt
     assert str(harness.draft) in request.prompt
     assert '"root":' in request.prompt
@@ -819,17 +822,33 @@ def test_cli_prints_json_and_exits_by_outcome(
             "--overwrite",
             "--max-attempts",
             "2",
+            "--agent-provider",
+            "amplifier-agent",
             "--model",
-            DEFAULT_INTELLIGENCE_MODEL,
+            DEFAULT_INTELLIGENCE_MODELS["amplifier-agent"],
             "--reasoning-effort",
-            "high",
+            "medium",
             "--timeout-seconds",
             "50",
         ],
     )
     assert result.exit_code == exit_code, result.output
     assert json.loads(result.stdout)["outcome"] == outcome
-    assert calls == [("an app", harness.project, "app", True, True, True, 2, DEFAULT_INTELLIGENCE_MODEL, "high", 50)]
+    assert calls == [
+        (
+            "an app",
+            harness.project,
+            "app",
+            True,
+            True,
+            True,
+            2,
+            "amplifier-agent",
+            DEFAULT_INTELLIGENCE_MODELS["amplifier-agent"],
+            "medium",
+            50,
+        )
+    ]
 
 
 def test_cli_refuses_keep_without_verify(harness: Harness) -> None:
@@ -840,7 +859,8 @@ def test_cli_refuses_keep_without_verify(harness: Harness) -> None:
 
 def test_cli_progress_stays_off_stdout(harness: Harness, monkeypatch: pytest.MonkeyPatch) -> None:
     agent = FakeIntelligence([harness.author(), lambda request: cleanup()])
-    monkeypatch.setattr(create_module, "default_intelligence", lambda: agent)
+    monkeypatch.setattr(interface, "installed", lambda agent_provider: True)
+    monkeypatch.setattr(interface, "resolve_intelligence", lambda agent_provider, model: agent)
 
     result = CliRunner().invoke(
         app, ["create-profile", "--description", "an alpine twin", "--project", str(harness.project), "--name", NAME]
