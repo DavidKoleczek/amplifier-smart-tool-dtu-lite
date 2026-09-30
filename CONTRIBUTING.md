@@ -97,8 +97,12 @@ Each worker hands out host ports from its own range (`free_port` in `tests/conft
 
 #### Dashboard Development
 
-The dashboard is a Vite+TS+React app in `dashboard/`, served by the library from compiled assets in `src/dtu_lite/capabilities/dashboard/static/`.
-Those assets are committed, because the tool installs from this git repository and must run with no Node present.
+`dashboard/` holds two builds:
+
+- The MCP App view, a Vite+TS+React app with entry `mcp_app.html`, compiled to the single file `src/dtu_lite/adapters/static/mcp_app.html` that the MCP server serves.
+- The dashboard's host page and sandbox proxy, plain TS in `dashboard/host/`, compiled to `src/dtu_lite/capabilities/dashboard/static/`. They render the view the same way any MCP Apps host does.
+
+Both are committed, because the tool installs from this git repository and must run with no Node present.
 The `dashboard` precommit hook runs `uv run build-dashboard.py` whenever frontend source changes: with pnpm present it installs, lints, formats, type checks, and recompiles; without pnpm it says so and passes, since a Python-only change cannot have touched the frontend.
 
 Install dependencies (also done by `setup-for-dev.py` when pnpm is present):
@@ -107,14 +111,17 @@ Install dependencies (also done by `setup-for-dev.py` when pnpm is present):
 pnpm --dir dashboard install --frozen-lockfile
 ```
 
-Run with hot reload (two terminals):
+Run the dashboard, then rebuild whichever side changed:
 
 ```bash
 uv run dtu-lite dashboard --port 5199
-pnpm --dir dashboard dev
-```
 
-The Vite dev server proxies `/api` to port 5199; set `DTU_LITE_API_URL` to point it elsewhere.
+# Host page or sandbox: reload the browser, since they are read per request
+pnpm --dir dashboard build
+
+# View: restart the dashboard, since the MCP server reads the view once when it starts
+pnpm --dir dashboard build:view
+```
 
 Lint, format, and type check:
 
@@ -122,10 +129,10 @@ Lint, format, and type check:
 pnpm --dir dashboard check
 ```
 
-Compile the assets into the package, then commit them:
+Check and compile both into the package, then commit them:
 
 ```bash
-pnpm --dir dashboard build
+uv run build-dashboard.py
 ```
 
 #### References

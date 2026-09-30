@@ -283,19 +283,30 @@ A web page for a person: every universe on this machine, its state, its URLs, an
 def serve_dashboard(port: int | None = None, host: str = "127.0.0.1") -> Dashboard
 ```
 
-Binds the port, starts serving from a daemon thread, and returns at once with `Dashboard`: the `url` to open and `reachable`, which says whether that is only this machine or the local network. The server lives until the process exits; the CLI blocks for it. The default host keeps it off the network; pass `0.0.0.0` to expose it deliberately.
+Binds the port, starts serving from daemon threads, and returns at once with `Dashboard`: the `url` to open, the `mcp_url` of its MCP server, and `reachable`, which says whether that is only this machine or the local network. The server lives until the process exits; the CLI blocks for it. The default host keeps it off the network; pass `0.0.0.0` to expose it deliberately.
 
-The page is compiled assets shipped inside the package at `capabilities/dashboard/static/`, so running it needs nothing beyond the Python dependencies. Its data is a JSON API, each route one library call and nothing more:
+The page is a minimal MCP Apps host that renders the view of the MCP server below, served on the same port at `/mcp` over streamable HTTP. A sandbox proxy for the view runs on a second, free port, since the MCP Apps spec puts the view on its own origin. Both are compiled assets shipped inside the package at `capabilities/dashboard/static/`, so running it needs nothing beyond the Python dependencies. The dashboard adds no capability; a capability it should show gets an MCP tool that calls it.
+
+Raises `port-in-use`, and `dashboard-not-compiled` when the view is missing from the package.
+
+## MCP server
+
+The universe tools and the dashboard view as an [MCP](https://modelcontextprotocol.io) server, a thin surface over the library like the CLI, in `dtu_lite.adapters.mcp`.
+
+```python
+def create_server(view: Path = VIEW_PATH) -> MCPServer
+```
 
 ```
-GET    /api/universes         list_universes()
-GET    /api/universes/{id}    status(id)
-DELETE /api/universes/{id}    destroy(id)
+open_dashboard(id?)     list_universes(), rendered as the dashboard view in hosts that support MCP Apps
+list_universes()        list_universes()
+universe_status(id)     status(id)
+destroy_universe(id)    destroy(id)
 ```
 
-A `DtuLiteError` on any route is the body `{"code", "message", "remedy"}`: 404 for `universe-not-found`, 503 for `docker-unavailable`, 500 otherwise. Every other path serves the page. The dashboard adds no capability; a capability it should show gets a route that calls it.
+The view is `ui://dtu-lite/dashboard`, a single HTML file shipped at `adapters/static/mcp_app.html` and read once when the server is created. A `DtuLiteError` in a tool is a tool error carrying its message and remedy. `dtu-lite mcp` runs it over stdio; the dashboard serves it over streamable HTTP.
 
-Raises `port-in-use`.
+Raises `dashboard-not-compiled` when the view is missing.
 
 ## Intelligence
 

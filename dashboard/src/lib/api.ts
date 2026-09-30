@@ -1,51 +1,62 @@
-import type { ApiError, Universe } from "@/lib/types";
+import type { CallToolResult } from "@modelcontextprotocol/client";
 
-export class DashboardError extends Error {
-  code: string;
-  remedy: string;
+import { app } from "@/lib/host";
+import type { Universe } from "@/lib/types";
 
-  constructor(error: ApiError) {
-    super(error.message);
-    this.code = error.code;
-    this.remedy = error.remedy;
+// The MCP SDK prefixes every tool failure; the rest is the library's message and remedy.
+const TOOL_ERROR_PREFIX = /^Error executing tool \S+: /;
+
+export class DashboardError extends Error {}
+
+function structured<T>(name: string, result: CallToolResult): T {
+  if (result.isError) {
+    const text = result.content
+      .flatMap((block) => (block.type === "text" ? [block.text] : []))
+      .join(" ")
+      .replace(TOOL_ERROR_PREFIX, "");
+    throw new DashboardError(text || `\`${name}\` failed without a message.`);
   }
+  if (result.structuredContent === undefined) {
+    throw new DashboardError(
+      `\`${name}\` returned no structured content. Check that the server is DTU Lite.`,
+    );
+  }
+  return result.structuredContent as T;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, init);
-  if (response.ok) {
-    return (await response.json()) as T;
-  }
-  let error: ApiError = {
-    code: "http-error",
-    message: `The API answered ${response.status}.`,
-    remedy: "Check the terminal running `dtu-lite dashboard`.",
-  };
-  try {
-    error = (await response.json()) as ApiError;
-  } catch {
-    // Not one of the library's failures; the generic message stands.
-  }
-  throw new DashboardError(error);
+/** The universes in a result of `list_universes` or `open_dashboard`. */
+export function universesFrom(
+  result: CallToolResult,
+  name = "open_dashboard",
+): Universe[] {
+  return structured<{ result: Universe[] }>(name, result).result;
 }
 
-export function listUniverses(): Promise<Universe[]> {
-  return request<Universe[]>("/api/universes");
+async function call(
+  name: string,
+  args: Record<string, unknown> = {},
+): Promise<CallToolResult> {
+  return app.callServerTool({ name, arguments: args });
 }
 
-export function getUniverse(id: string): Promise<Universe> {
-  return request<Universe>(`/api/universes/${encodeURIComponent(id)}`);
+export async function listUniverses(): Promise<Universe[]> {
+  return universesFrom(await call("list_universes"), "list_universes");
+}
+
+export async function getUniverse(id: string): Promise<Universe> {
+  return structured<Universe>(
+    "universe_status",
+    await call("universe_status", { id }),
+  );
 }
 
 export async function destroyUniverse(id: string): Promise<void> {
-  await request<unknown>(`/api/universes/${encodeURIComponent(id)}`, {
-    method: "DELETE",
-  });
+  structured<unknown>(
+    "destroy_universe",
+    await call("destroy_universe", { id }),
+  );
 }
 
 export function describe(cause: unknown): string {
-  if (cause instanceof DashboardError) {
-    return `${cause.message} ${cause.remedy}`;
-  }
   return cause instanceof Error ? cause.message : String(cause);
 }

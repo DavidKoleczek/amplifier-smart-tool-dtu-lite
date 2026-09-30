@@ -1,4 +1,4 @@
-// Mirrors the result classes in src/dtu_lite/schemas.py; the API returns them unchanged.
+// Mirrors the result classes in src/dtu_lite/schemas.py; the MCP tools return them unchanged.
 
 export type UniverseState = "starting" | "running" | "degraded" | "stopped";
 export type Health = "starting" | "healthy" | "unhealthy";
@@ -28,10 +28,4 @@ export type Universe = {
   urls: Url[];
   state_path: string;
   created_at: string;
-};
-
-export type ApiError = {
-  code: string;
-  message: string;
-  remedy: string;
 };

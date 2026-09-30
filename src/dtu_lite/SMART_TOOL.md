@@ -54,10 +54,11 @@ wrapper over it, so anything you can do from the shell you can also do from Pyth
 ## Command surfaces
 
 Deterministic commands run with no model provider configured. Today those are `check`,
-`validate-profile`, `launch`, `list`, `status`, `exec`, `file-push`, `file-pull`, `destroy`, and `dashboard`; the
+`validate-profile`, `launch`, `list`, `status`, `exec`, `file-push`, `file-pull`, `destroy`, `dashboard`, and `mcp`; the
 capability list below is authoritative. `install` is model-backed unless Docker is already usable, and
 `create-profile` is model-backed; both say so in their help text. `dashboard` serves a local web page over the same library: every universe on the machine, its
-URLs, and a destroy button, for a person rather than an agent.
+URLs, and a destroy button, for a person rather than an agent. `mcp` serves the universe tools, and that page as an MCP App,
+to an MCP client over stdio; `dashboard` serves the same MCP server at `/mcp`.
 
 ## Before writing code
 

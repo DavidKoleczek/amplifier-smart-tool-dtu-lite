@@ -84,9 +84,20 @@ dtu-lite file-pull --id <id> --source /var/log/app.log --destination ./
 # Take it down
 dtu-lite destroy --id <id>
 
-# A web page listing every universe on this machine; prints its URL
+# A web page showing every universe on this machine; prints its URL and its MCP server's
 dtu-lite dashboard
+
+# The universe tools and the dashboard as an MCP server on stdio, for MCP clients
+dtu-lite mcp
 ```
+
+To add it to an MCP client such as VS Code, in `.mcp.json` at the workspace root:
+
+```json
+{"mcpServers": {"dtu-lite": {"type": "stdio", "command": "dtu-lite", "args": ["mcp"]}}}
+```
+
+Hosts that support MCP Apps render the dashboard in the chat. A client that connects over HTTP instead can use the `mcp_url` that `dtu-lite dashboard` prints.
 
 Profiles live under `.agents/digital-twin-universe-lite/<name>/` in a project; the tool also ships ready-to-launch [examples](src/dtu_lite/examples). See the [profile reference](docs/03-profile.md).
 

@@ -200,10 +200,11 @@ def destroy(id: str) -> Destroyed:
 
 
 def serve_dashboard(port: int | None = None, host: str = "127.0.0.1") -> Dashboard:
-    """Serve the dashboard from a background thread and return where it is; it lives until the process exits.
+    """Serve the dashboard from background threads and return where it is; it lives until the process exits.
 
-    The web app is compiled assets shipped with the package; its data is a JSON API over `list_universes`,
-    `status`, and `destroy`, so the dashboard adds no capability of its own.
+    The page is a minimal MCP Apps host, compiled and shipped with the package, that renders the MCP App view of
+    `dtu_lite.adapters.mcp`, whose tools wrap `list_universes`, `status`, and `destroy`. It serves that MCP server at
+    `/mcp` too, so the dashboard adds no capability of its own.
 
     Args:
         port: The port to bind; a free one is chosen when omitted.

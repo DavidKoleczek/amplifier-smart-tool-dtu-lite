@@ -1,9 +1,10 @@
 """
 Check and compile the dashboard into the package, when the tools to do so are present.
 
-The compiled assets under `src/dtu_lite/capabilities/dashboard/static/` are committed, so the tool installs and
-runs with no Node anywhere. Node and pnpm are needed only to change the frontend; without them this script says so
-and exits 0, so `prek run --all-files` passes for a Python-only contributor.
+The compiled assets under `src/dtu_lite/capabilities/dashboard/static/` and the MCP App view at
+`src/dtu_lite/adapters/static/mcp_app.html` are committed, so the tool installs and runs with no Node anywhere.
+Node and pnpm are needed only to change the frontend; without them this script says so and exits 0, so
+`prek run --all-files` passes for a Python-only contributor.
 """
 
 from pathlib import Path
@@ -21,7 +22,7 @@ def main() -> None:
             "Install Node 22+ and pnpm only to change the frontend (see CONTRIBUTING.md)."
         )
         return
-    for script in ("install --frozen-lockfile", "check", "build"):
+    for script in ("install --frozen-lockfile", "check", "build", "build:view"):
         subprocess.run([pnpm, "--dir", str(DASHBOARD), *script.split()], check=True)
 
 

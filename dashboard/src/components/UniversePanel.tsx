@@ -1,10 +1,11 @@
 import { Check, Copy, ExternalLink, Info, X } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { DestroyDialog } from "@/components/DestroyDialog";
 import { StatusDot } from "@/components/StatusDot";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { app } from "@/lib/host";
 import { capitalize } from "@/lib/status";
 import { relativeTime } from "@/lib/time";
 import type { Universe } from "@/lib/types";
@@ -30,26 +31,81 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function CopyCommand({ command }: { command: string }) {
+function CopyText({ text, label }: { text: string; label: string }) {
   const [copied, setCopied] = useState(false);
+  const [blocked, setBlocked] = useState(false);
+  const textRef = useRef<HTMLSpanElement>(null);
   async function copy() {
-    await navigator.clipboard.writeText(command);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setBlocked(true);
+      if (textRef.current !== null) {
+        window.getSelection()?.selectAllChildren(textRef.current);
+      }
+    }
   }
   return (
-    <div className="flex items-center gap-2 rounded-md bg-muted px-2.5 py-1.5 font-mono text-xs">
-      <span className="flex-1 truncate" title={command}>
-        {command}
-      </span>
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        onClick={copy}
-        aria-label="Copy command"
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-2 rounded-md bg-muted px-2.5 py-1.5 font-mono text-xs">
+        <span
+          ref={textRef}
+          className={
+            blocked ? "flex-1 break-all select-all" : "flex-1 truncate"
+          }
+          title={text}
+        >
+          {text}
+        </span>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          onClick={copy}
+          aria-label={label}
+        >
+          {copied ? <Check /> : <Copy />}
+        </Button>
+      </div>
+      {blocked && (
+        <p className="text-xs text-muted-foreground">
+          The host blocked copying. The text is selected; copy it yourself.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Link({ url, label }: { url: string; label: string }) {
+  const [refused, setRefused] = useState(false);
+  async function open(event: React.MouseEvent) {
+    // Views run in a sandboxed iframe, so only the host can open a new tab.
+    event.preventDefault();
+    try {
+      const { isError } = await app.openLink({ url });
+      setRefused(Boolean(isError));
+    } catch {
+      setRefused(true);
+    }
+  }
+  return (
+    <div className="flex flex-col text-sm">
+      <a
+        href={url}
+        onClick={open}
+        className="inline-flex items-center gap-1 text-primary hover:underline"
       >
-        {copied ? <Check /> : <Copy />}
-      </Button>
+        {label}
+        <ExternalLink className="size-3.5" />
+      </a>
+      {refused ? (
+        <CopyText text={url} label="Copy URL" />
+      ) : (
+        <span className="text-muted-foreground">
+          {url.replace(/^https?:\/\//, "")}
+        </span>
+      )}
     </div>
   );
 }
@@ -128,10 +184,10 @@ export function UniversePanel({
           }
         />
         {checked.length > 0 && !ready && (
-          <div className="flex items-start gap-2 rounded-md border border-orange-200 bg-orange-50 p-3 text-sm">
+          <div className="flex items-start gap-2 rounded-md border border-orange-200 bg-orange-50 p-3 text-sm dark:border-orange-900 dark:bg-orange-950/40">
             <Info className="mt-0.5 size-4 shrink-0 text-orange-500" />
             <div className="flex-1">
-              <p className="font-medium text-orange-900">
+              <p className="font-medium text-orange-900 dark:text-orange-200">
                 {checked.length - failing.length} of {checked.length} checks
                 passed
               </p>
@@ -161,20 +217,7 @@ export function UniversePanel({
           <p className="text-sm text-muted-foreground">No published ports.</p>
         )}
         {universe.urls.map((url) => (
-          <div key={url.url} className="flex flex-col text-sm">
-            <a
-              href={url.url}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 text-primary hover:underline"
-            >
-              {url.label ?? url.path}
-              <ExternalLink className="size-3.5" />
-            </a>
-            <span className="text-muted-foreground">
-              {url.url.replace(/^https?:\/\//, "")}
-            </span>
-          </div>
+          <Link key={url.url} url={url.url} label={url.label ?? url.path} />
         ))}
       </div>
 
@@ -193,7 +236,10 @@ export function UniversePanel({
         <Row label="Twin" value={universe.twin_machine} />
         <Row label="Profile path" value={universe.profile_path} />
         <Row label="State path" value={universe.state_path} />
-        <CopyCommand command={`dtu-lite exec --id ${universe.id}`} />
+        <CopyText
+          text={`dtu-lite exec --id ${universe.id}`}
+          label="Copy command"
+        />
       </div>
 
       <Separator />

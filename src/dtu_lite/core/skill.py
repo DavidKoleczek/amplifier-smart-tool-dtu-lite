@@ -69,7 +69,13 @@ CAPABILITIES = (
     ),
     Capability(
         "dashboard",
-        "Serve a web page listing every universe on this machine, with its URLs and a destroy button; print its URL.",
+        "Serve a web page showing every universe on this machine, with its URLs and a destroy button, and its MCP server; "
+        "print both URLs.",
+        model_backed=False,
+    ),
+    Capability(
+        "mcp",
+        "Serve list, status, and destroy, and the dashboard as an MCP App, to an MCP client over stdio.",
         model_backed=False,
     ),
 )

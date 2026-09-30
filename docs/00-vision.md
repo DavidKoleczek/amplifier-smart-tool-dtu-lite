@@ -106,10 +106,11 @@ dtu-lite create-profile --description "a FastAPI app on port 8000 using Postgres
 dtu-lite doctor --symptom "the twin cannot reach the database"
 ```
 
-Serve commands run a local web UI over the same library:
+Serve commands offer the same library as a local web UI, and as an MCP server whose dashboard renders in MCP clients as an MCP App:
 
 ```bash
 dtu-lite dashboard
+dtu-lite mcp
 ```
 
 - Every result is one JSON document on stdout. Failures carry a stable `code` and a `remedy`.

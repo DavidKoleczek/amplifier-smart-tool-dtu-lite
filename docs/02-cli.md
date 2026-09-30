@@ -115,7 +115,15 @@ dtu-lite destroy --id <id>
 dtu-lite dashboard [--port <n>] [--host 127.0.0.1]
 ```
 
-`lib.serve_dashboard()`, printed as JSON: the URL to open and who can reach it. The command then keeps serving until Ctrl+C, which exits 0. Exits 1 with `port-in-use` when `--port` names a held port; without `--port` a free one is chosen.
+`lib.serve_dashboard()`, printed as JSON: the `url` to open, the `mcp_url` of its MCP server, and who can reach them. The command then keeps serving until Ctrl+C, which exits 0. Exits 1 with `port-in-use` when `--port` names a held port, and `dashboard-not-compiled` when the view is missing; without `--port` a free one is chosen.
+
+## dtu-lite mcp
+
+```bash
+dtu-lite mcp
+```
+
+`dtu_lite.adapters.mcp.create_server()` over stdio, for MCP clients that launch the server themselves. stdin and stdout carry only MCP messages until the client disconnects. Exits 1 with `dashboard-not-compiled` when the view is missing.
 
 ## Adding a command
 

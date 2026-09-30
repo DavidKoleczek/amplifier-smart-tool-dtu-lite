@@ -3,9 +3,11 @@ import { useCallback, useEffect, useState } from "react";
 import { Toolbar, type Filter } from "@/components/Toolbar";
 import { UniversePanel } from "@/components/UniversePanel";
 import { UniverseTable } from "@/components/UniverseTable";
-import { describe, getUniverse, listUniverses } from "@/lib/api";
+import { describe, getUniverse, listUniverses, universesFrom } from "@/lib/api";
+import { onSeed } from "@/lib/host";
 import { sortUniverses, toggleSort, type Sort } from "@/lib/sort";
 import type { Universe } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 const POLL_MS = 5000;
 const CLOCK_MS = 1000;
@@ -51,6 +53,24 @@ function App() {
       setRefreshing(false);
     }
   }, []);
+
+  useEffect(
+    () =>
+      onSeed(({ result, selectedId }) => {
+        if (result !== undefined) {
+          try {
+            setUniverses(universesFrom(result));
+            setUpdatedAt(Date.now());
+          } catch (cause) {
+            setError(describe(cause));
+          }
+        }
+        if (selectedId !== undefined) {
+          setSelectedId(selectedId);
+        }
+      }),
+    [],
+  );
 
   useEffect(() => {
     const initial = setTimeout(() => void refresh(), 0);
@@ -109,7 +129,7 @@ function App() {
   }
 
   return (
-    <div className="mx-auto flex min-h-svh max-w-6xl flex-col gap-6 p-8">
+    <div className="mx-auto flex max-w-6xl flex-col gap-6 p-4 sm:p-8">
       <header className="text-sm font-semibold">DTU Lite</header>
 
       <div>
@@ -139,7 +159,12 @@ function App() {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+      <div
+        className={cn(
+          "grid gap-6",
+          selected !== null && "lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]",
+        )}
+      >
         <UniverseTable
           universes={visible}
           grouped={grouped}

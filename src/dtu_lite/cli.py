@@ -9,6 +9,7 @@ from typing import Annotated
 import typer
 
 from dtu_lite import lib
+from dtu_lite.adapters import mcp as mcp_adapter
 from dtu_lite.schemas import DEFAULT_INTELLIGENCE_MODEL, DtuLiteError, ReasoningEffort
 
 app = typer.Typer(
@@ -258,14 +259,26 @@ def dashboard(
         "127.0.0.1"
     ),
 ) -> None:
-    """Serve the dashboard, a web page listing every universe on this machine, and print its URL. Deterministic.
+    """Serve the dashboard, a web page showing every universe on this machine, and print its URL. Deterministic.
 
-    Prints where it is served as JSON, then keeps serving until Ctrl+C. Exits 1 with the cause and remedy when
-    the port is held.
+    The page renders the MCP App that `dtu-lite mcp` offers, from the same MCP server, which it also serves at
+    `mcp_url` for other MCP clients. Prints where it is served as JSON, then keeps serving until Ctrl+C. Exits 1
+    with the cause and remedy when the port is held or the dashboard is not compiled.
     """
     typer.echo(lib.serve_dashboard(port, host).model_dump_json(indent=2))
     with contextlib.suppress(KeyboardInterrupt):
         threading.Event().wait()
+
+
+@app.command()
+def mcp() -> None:
+    """Serve universe list, status, and destroy, plus the dashboard as an MCP App, over MCP on stdio. Deterministic.
+
+    For MCP clients that launch the server themselves, such as VS Code. Reads and writes MCP messages on stdin
+    and stdout until the client disconnects; prints nothing else to stdout. Exits 1 with the cause and remedy
+    when the dashboard is not compiled.
+    """
+    mcp_adapter.run_stdio()
 
 
 def main() -> int:

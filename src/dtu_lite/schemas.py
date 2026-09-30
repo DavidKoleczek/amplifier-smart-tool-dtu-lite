@@ -312,6 +312,7 @@ class Dashboard(BaseModel):
     """Where the dashboard is being served, and who can reach it."""
 
     url: str = Field(description="What to open in a browser")
+    mcp_url: str = Field(description="The same MCP server over streamable HTTP, for any other MCP client")
     host: str = Field(description="The interface that was bound")
     port: int
     reachable: str = Field(description="`only this machine`, or the local network when bound to every interface")
